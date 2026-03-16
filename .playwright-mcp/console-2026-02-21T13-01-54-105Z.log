@@ -1,0 +1,27 @@
+[   36033ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:9002/api/products:0
+[  181080ms] [ERROR] %o
+
+%s Error: Event handlers cannot be passed to Client Component props.
+  <... onSubmit={function onSubmit}>
+                ^^^^^^^^^^^^^^^^^^^
+If you need interactivity, consider converting part of this to a Client Component.
+    at resolveErrorDev (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17582:48)
+    at processFullStringRow (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17798:23)
+    at processFullBinaryRow (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17786:9)
+    at progress (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17932:102) The above error occurred in the <Unknown> component. It was handled by the <ErrorBoundaryHandler> error boundary. @ http://localhost:9002/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:1863
+[  181083ms] [ERROR] Error: Event handlers cannot be passed to Client Component props.
+  <... onSubmit={function onSubmit}>
+                ^^^^^^^^^^^^^^^^^^^
+If you need interactivity, consider converting part of this to a Client Component.
+    at resolveErrorDev (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17582:48)
+    at processFullStringRow (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17798:23)
+    at processFullBinaryRow (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17786:9)
+    at progress (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17932:102) @ http://localhost:9002/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:1225
+[  181084ms] [ERROR] Error: Event handlers cannot be passed to Client Component props.
+  <... onSubmit={function onSubmit}>
+                ^^^^^^^^^^^^^^^^^^^
+If you need interactivity, consider converting part of this to a Client Component.
+    at resolveErrorDev (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17582:48)
+    at processFullStringRow (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17798:23)
+    at processFullBinaryRow (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17786:9)
+    at progress (http://localhost:9002/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:17932:102) @ http://localhost:9002/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:1225

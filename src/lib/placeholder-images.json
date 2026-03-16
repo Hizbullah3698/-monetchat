@@ -1,0 +1,112 @@
+{
+  "placeholderImages": [
+    {
+      "id": "1",
+      "description": "A placeholder graphic for product search",
+      "imageUrl": "https://images.unsplash.com/photo-1588580822151-5b2308c62c2f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxwcm9kdWN0JTIwc2VhcmNofGVufDB8fHx8MTc3MjE1NDg0Nnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "magnifying glass"
+    },
+    {
+      "id": "banner-1",
+      "description": "A promotional banner for a sale",
+      "imageUrl": "https://images.unsplash.com/photo-1555529771-835f59fc5efe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxzYWxlJTIwYmFubmVyfGVufDB8fHx8MTc2MjYxNTAwMnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "sale banner"
+    },
+    {
+      "id": "banner-2",
+      "description": "A banner advertising new arrivals",
+      "imageUrl": "https://images.unsplash.com/photo-1481437156560-3205f6a85705?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxuZXclMjBhc3JpdmFsc3xlbnwwfHx8fDE3NzE2NTQ4NDd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "new arrivals"
+    },
+    {
+      "id": "banner-3",
+      "description": "A banner highlighting local sellers",
+      "imageUrl": "https://images.unsplash.com/photo-1528605248644-eff480b02bf1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxtYXJrZXQlMjBzdGFsbHxlbnwwfHx8fDE3NzE2NTQ4NDd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "local market"
+    },
+    {
+      "id": "product-headphones",
+      "description": "Wireless headphones on a colorful background",
+      "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHx3aXJlbGVzcyUyMGhlYWRwaG9uZXN8ZW58MHx8fHwxNzYyNjE1MzYxfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "wireless headphones"
+    },
+    {
+      "id": "product-smartwatch",
+      "description": "A modern smartwatch displaying the time",
+      "imageUrl": "https://images.unsplash.com/photo-1546868871-7041f2a55e12?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxzbWFydHdhdGNofGVufDB8fHx8MTc2MjYxNTM2MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "smartwatch"
+    },
+    {
+      "id": "product-coffeemaker",
+      "description": "A sleek coffee maker brewing coffee",
+      "imageUrl": "https://images.unsplash.com/photo-1622832442434-d3c5a6d36573?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxjb2ZmZWUlMjBtYWtlcnxlbnwwfHx8fDE3NjI2MTUzNjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "coffee maker"
+    },
+    {
+      "id": "product-blender",
+      "description": "A blender with fresh fruit ready for a smoothie",
+      "imageUrl": "https://images.unsplash.com/photo-1574762520993-a9a7f58384f5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxibGVuZGVyfGVufDB8fHx8MTc2MjYxNTM2MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "blender"
+    },
+    {
+      "id": "seller-1-photo",
+      "description": "Placeholder for Tech Haven store",
+      "imageUrl": "https://images.unsplash.com/photo-1590599145008-e4ec48682067?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHx0ZWNoJTIwc3RvcmV8ZW58MHx8fHwxNzYyNDQ3Mzc2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "tech store"
+    },
+    {
+      "id": "seller-2-photo",
+      "description": "Placeholder for Gadget Galaxy store",
+      "imageUrl": "https://images.unsplash.com/photo-1759820940590-b07942584431?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxnYWRnZXQlMjBzdG9yZXxlbnwwfHx8fDE3NjI1Mjg1NTB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "gadget store"
+    },
+    {
+      "id": "seller-3-photo",
+      "description": "Placeholder for Electro World store",
+      "imageUrl": "https://images.unsplash.com/photo-1645026479149-54f0ae80fb31?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxlbGVjdHJvbmljcyUyMHNob3B8ZW58MHx8fHwxNzYyNDIxMTM5fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "electronics shop"
+    },
+    {
+      "id": "seller-4-photo",
+      "description": "Placeholder for Home Goods Central store",
+      "imageUrl": "https://images.unsplash.com/photo-1496180727794-817822f65950?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxob21lJTIwZ29vZHN8ZW58MHx8fHwxNzYyNTI4NTUwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "home goods"
+    },
+    {
+      "id": "seller-5-photo",
+      "description": "Placeholder for Kitchen Creations store",
+      "imageUrl": "https://images.unsplash.com/photo-1509023667260-6677209e6fdf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxraXRjaGVud2FyZSUyMHNob3B8ZW58MHx8fHwxNzYyNTI4NTUwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "kitchenware shop"
+    },
+    {
+      "id": "seller-6-photo",
+      "description": "Placeholder for Digital Dreams store",
+      "imageUrl": "https://images.unsplash.com/photo-1571857089849-f6390447191a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxlbGVjdHJvbmljcyUyMHN0b3JlfGVufDB8fHx8MTc2MjUyOTEyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "electronics store"
+    },
+    {
+      "id": "seller-7-photo",
+      "description": "Placeholder for Connect Electronics store",
+      "imageUrl": "https://images.unsplash.com/photo-1758520387469-30e8ed486f92?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxnYWRnZXQlMjBzaG9wfGVufDB8fHx8MTc2MjUyOTEyNXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "gadget shop"
+    },
+    {
+      "id": "seller-8-photo",
+      "description": "Placeholder for Future Gadgets store",
+      "imageUrl": "https://images.unsplash.com/photo-1640955045488-9a4bdad646d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxmdXR1cmlzdGljJTIwZ2FkZ2V0c3xlbnwwfHx8fDE3NjI1MjkxMjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "futuristic gadgets"
+    },
+    {
+      "id": "seller-9-photo",
+      "description": "Placeholder for Urban Homeware store",
+      "imageUrl": "https://images.unsplash.com/photo-1663770114127-4f61cb62b56d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxtb2Rlcm4lMjBob21ld2FyZXxlbnwwfHx8fDE3NjI1MjkxMjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "modern homeware"
+    },
+    {
+      "id": "seller-10-photo",
+      "description": "Placeholder for The Appliance Stop store",
+      "imageUrl": "https://images.unsplash.com/photo-1762250990002-a0d48eef5aed?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxhcHBsaWFuY2UlMjBzdG9yZXxlbnwwfHx8fDE3NjI1MjkxMjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "appliance store"
+    }
+  ]
+}

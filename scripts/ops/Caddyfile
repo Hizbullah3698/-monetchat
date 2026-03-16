@@ -1,0 +1,18 @@
+# Caddyfile for Monetchat (ecom.lumen-path.com)
+
+ecom.lumen-path.com {
+    # Reverse Proxy to Next.js App (Port 4500)
+    reverse_proxy localhost:4500 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Enable Compression
+    encode gzip
+
+    # Logging
+    log {
+        output file C:\Backups\logs\caddy_access.log
+    }
+}

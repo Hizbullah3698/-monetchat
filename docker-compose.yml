@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: Monetchat_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: Monetchat
+      POSTGRES_USER: Monetchatuser
+      POSTGRES_PASSWORD: Monetchatpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: Monetchat_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: Monetchat_app
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - qdrant
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://Monetchatuser:Monetchatpassword@postgres:5432/Monetchat
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_BASE_URL: http://192.168.192.1:11434
+      OLLAMA_CHAT_MODEL: qwen2.5:7b
+      NEXTAUTH_URL: https://chatsoq.com
+      NEXTAUTH_SECRET: "gBsjAQE8qJNFc5P1zhKNFeeJtdabJxPE9Q7NSt3HBesJCqkXs14CFlak3rJegCMw"
+      OPENAI_API_KEY: your_openai_api_key_here
+      NEXT_PUBLIC_APP_URL: https://chatsoq.com
+      PORT: 3000
+      QDRANT_API_KEY: ""
+      AWS_REGION: me-south-1
+      AWS_ACCESS_KEY_ID: your_access_key
+      AWS_SECRET_ACCESS_KEY: your_secret_key
+      S3_BUCKET_NAME: Monetchat-media
+      S3_CDN_URL: https://Monetchat-media.s3.me-south-1.amazonaws.com
+      JWT_SECRET: "gBsjAQE8qJNFc5P1zhKNFeeJtdabJxPE9Q7NSt3HBesJCqkXs14CFlak3rJegCMw"
+      JWT_EXPIRES_IN: 24h
+      DEFAULT_COUNTRY: KW
+      DEFAULT_CURRENCY: KWD
+      DEFAULT_LANGUAGE: ar
+
+volumes:
+  postgres_data:
+  qdrant_data:
