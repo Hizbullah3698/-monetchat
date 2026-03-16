@@ -1,3 +1,0 @@
-[   72976ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://localhost:9002/_next/static/chunks/node_modules_32ba19d8._.js:2903
-[   72981ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://localhost:9002/_next/static/chunks/node_modules_32ba19d8._.js:2903
-[   75045ms] [WARNING] Image with src "https://s3.eu-north-1.amazonaws.com/pickpic.app/chat/fa3d2a25-7200-4353-a1d3-875583e75a99.jpg" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes @ http://localhost:9002/_next/static/chunks/node_modules_next_dist_2ecbf5fa._.js:1073
