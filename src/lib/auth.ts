@@ -1,28 +1,50 @@
-// Legacy auth compatibility shim
-// Routes still importing from @/lib/auth should be migrated to use @/lib/auth/jwt
-// This file provides stub exports to prevent build failures
+import bcrypt from 'bcryptjs';
+import { SignJWT, jwtVerify } from 'jose';
 
-import { getCurrentUser, TokenPayload } from '@/lib/auth/jwt';
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
+const ACCESS_TOKEN_EXPIRES = '15m';
+const REFRESH_TOKEN_EXPIRES = '7d';
 
-export const SESSION_COOKIE_NAME = 'auth_token';
+const secret = new TextEncoder().encode(JWT_SECRET);
 
-export async function getSession(): Promise<{ user: { id: string; email: string; role: string } } | null> {
-  const user = await getCurrentUser();
-  if (!user) return null;
-  return {
-    user: {
-      id: user.userId,
-      email: user.email,
-      role: user.role,
-    },
-  };
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 10);
 }
 
-// Stubs for legacy middleware imports (no longer used)
-export async function decrypt(_token: string): Promise<{ user: TokenPayload } | null> {
-  return null;
+export async function comparePassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
 }
 
-export async function updateSession(_request: unknown): Promise<void> {
-  // No-op - JWT tokens don't need session refresh in middleware
+export async function signAccessToken(payload: { userId: string; role: string; email: string }) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(ACCESS_TOKEN_EXPIRES)
+    .sign(secret);
+}
+
+export async function signRefreshToken(payload: { userId: string }) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(REFRESH_TOKEN_EXPIRES)
+    .sign(secret);
+}
+
+export async function verifyToken(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    return payload;
+  } catch (err) {
+    return null;
+  }
+}
+
+export function generateToken(length: number = 32): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }

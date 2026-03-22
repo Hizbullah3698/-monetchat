@@ -1,0 +1,54 @@
+2026-03-18 03:59:15.577 +03 [17860] LOG:  starting PostgreSQL 16.13, compiled by Visual C++ build 1944, 64-bit
+2026-03-18 03:59:15.582 +03 [17860] LOG:  listening on IPv6 address "::1", port 5433
+2026-03-18 03:59:15.583 +03 [17860] LOG:  listening on IPv4 address "127.0.0.1", port 5433
+2026-03-18 03:59:15.629 +03 [20980] LOG:  database system was shut down at 2026-03-18 03:58:47 +03
+2026-03-18 03:59:15.644 +03 [17860] LOG:  database system is ready to accept connections
+2026-03-18 04:01:35.483 +03 [9040] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-03-18 04:01:35.852 +03 [12120] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-03-18 04:04:15.639 +03 [10468] LOG:  checkpoint starting: time
+2026-03-18 04:06:11.160 +03 [10468] LOG:  checkpoint complete: wrote 1060 buffers (6.5%); 0 WAL file(s) added, 0 removed, 0 recycled; write=115.332 s, sync=0.174 s, total=115.521 s; sync files=374, longest=0.002 s, average=0.001 s; distance=5274 kB, estimate=5274 kB; lsn=0/1A98EF0, redo lsn=0/1A98EB8
+2026-03-18 04:19:15.219 +03 [10468] LOG:  checkpoint starting: time
+2026-03-18 04:19:16.001 +03 [10468] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.771 s, sync=0.003 s, total=0.783 s; sync files=5, longest=0.001 s, average=0.001 s; distance=1 kB, estimate=4746 kB; lsn=0/1A99300, redo lsn=0/1A992C8
+2026-03-18 04:27:19.256 +03 [23932] ERROR:  character with byte sequence 0xd8 0xa7 in encoding "UTF8" has no equivalent in encoding "WIN1252"
+2026-03-18 04:27:19.256 +03 [23932] CONTEXT:  unnamed portal parameter $3
+2026-03-18 04:27:19.256 +03 [23932] STATEMENT:  INSERT INTO "public"."countries" ("code","name","name_ar","currency_code","currency_symbol","phone_code","is_active","created_at") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING "public"."countries"."code"
+2026-03-18 04:27:19.273 +03 [23932] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-03-18 04:29:16.011 +03 [10468] LOG:  checkpoint starting: time
+2026-03-18 04:29:16.459 +03 [10468] LOG:  checkpoint complete: wrote 5 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.434 s, sync=0.004 s, total=0.448 s; sync files=5, longest=0.001 s, average=0.001 s; distance=1 kB, estimate=4272 kB; lsn=0/1A997C8, redo lsn=0/1A99790
+2026-03-18 04:34:16.472 +03 [10468] LOG:  checkpoint starting: time
+2026-03-18 04:34:16.922 +03 [10468] LOG:  checkpoint complete: wrote 5 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.440 s, sync=0.003 s, total=0.450 s; sync files=5, longest=0.001 s, average=0.001 s; distance=2 kB, estimate=3845 kB; lsn=0/1A99FC8, redo lsn=0/1A99F90
+2026-03-18 04:46:17.720 +03 [17860] LOG:  received fast shutdown request
+2026-03-18 04:46:17.722 +03 [17860] LOG:  aborting any active transactions
+2026-03-18 04:46:17.722 +03 [12024] FATAL:  terminating connection due to administrator command
+2026-03-18 04:46:17.728 +03 [17860] LOG:  background worker "logical replication launcher" (PID 25320) exited with exit code 1
+2026-03-18 04:46:17.730 +03 [10468] LOG:  shutting down
+2026-03-18 04:46:17.730 +03 [10468] LOG:  checkpoint starting: shutdown immediate
+2026-03-18 04:46:17.749 +03 [10468] LOG:  checkpoint complete: wrote 0 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.001 s, sync=0.001 s, total=0.020 s; sync files=0, longest=0.000 s, average=0.000 s; distance=0 kB, estimate=3460 kB; lsn=0/1A9A090, redo lsn=0/1A9A090
+2026-03-18 04:46:17.772 +03 [17860] LOG:  database system is shut down
+2026-03-18 04:46:24.872 +03 [13944] LOG:  starting PostgreSQL 16.13, compiled by Visual C++ build 1944, 64-bit
+2026-03-18 04:46:24.876 +03 [13944] LOG:  listening on IPv6 address "::1", port 5433
+2026-03-18 04:46:24.876 +03 [13944] LOG:  listening on IPv4 address "127.0.0.1", port 5433
+2026-03-18 04:46:24.924 +03 [17156] LOG:  database system was shut down at 2026-03-18 04:46:20 +03
+2026-03-18 04:46:24.936 +03 [13944] LOG:  database system is ready to accept connections
+2026-03-18 04:46:46.643 +03 [9460] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-03-18 04:51:24.928 +03 [21356] LOG:  checkpoint starting: time
+2026-03-18 04:53:20.413 +03 [21356] LOG:  checkpoint complete: wrote 1073 buffers (6.5%); 0 WAL file(s) added, 0 removed, 0 recycled; write=115.342 s, sync=0.128 s, total=115.489 s; sync files=374, longest=0.021 s, average=0.001 s; distance=5231 kB, estimate=5231 kB; lsn=0/1A8E5E0, redo lsn=0/1A8E5A8
+2026-03-18 04:56:24.436 +03 [21356] LOG:  checkpoint starting: time
+2026-03-18 04:56:25.964 +03 [21356] LOG:  checkpoint complete: wrote 15 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.505 s, sync=0.007 s, total=1.528 s; sync files=11, longest=0.002 s, average=0.001 s; distance=2 kB, estimate=4708 kB; lsn=0/1A8F018, redo lsn=0/1A8EFE0
+2026-03-18 05:01:24.975 +03 [21356] LOG:  checkpoint starting: time
+2026-03-18 05:01:25.521 +03 [21356] LOG:  checkpoint complete: wrote 6 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.537 s, sync=0.003 s, total=0.546 s; sync files=6, longest=0.002 s, average=0.001 s; distance=1 kB, estimate=4238 kB; lsn=0/1A8F748, redo lsn=0/1A8F710
+2026-03-18 05:06:24.521 +03 [21356] LOG:  checkpoint starting: time
+2026-03-18 05:06:25.078 +03 [21356] LOG:  checkpoint complete: wrote 6 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.540 s, sync=0.005 s, total=0.557 s; sync files=6, longest=0.003 s, average=0.001 s; distance=2 kB, estimate=3814 kB; lsn=0/1A8FF70, redo lsn=0/1A8FF38
+2026-03-18 05:11:24.094 +03 [21356] LOG:  checkpoint starting: time
+2026-03-18 05:11:24.643 +03 [21356] LOG:  checkpoint complete: wrote 6 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.539 s, sync=0.004 s, total=0.549 s; sync files=6, longest=0.002 s, average=0.001 s; distance=2 kB, estimate=3433 kB; lsn=0/1A90B08, redo lsn=0/1A90AD0
+2026-03-18 05:25:41.432 +03 [16940] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-03-18 05:25:41.433 +03 [21764] LOG:  could not receive data from client: An existing connection was forcibly closed by the remote host.
+	
+2026-03-18 05:31:24.687 +03 [21356] LOG:  checkpoint starting: time
+2026-03-18 05:31:26.137 +03 [21356] LOG:  checkpoint complete: wrote 14 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.429 s, sync=0.005 s, total=1.451 s; sync files=11, longest=0.001 s, average=0.001 s; distance=4 kB, estimate=3090 kB; lsn=0/1A91C30, redo lsn=0/1A91BF8
+2026-03-18 06:46:07.655 +03 [13944] LOG:  could not reserve shared memory region (addr=000001BE3E8F0000) for child 00000000000013EC: error code 487

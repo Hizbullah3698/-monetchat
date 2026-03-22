@@ -8,7 +8,7 @@ const prisma = new PrismaClient({
   log: ['warn', 'error'],
 });
 
-const DATA_FILE = 'C:\\inetpub\\wwwroot\\pickpickdata\\q84sale_listings.json';
+const DATA_FILE = 'C:\\inetpub\\wwwroot\\monetchat_migration_local\\monetchat_repo\\temp\\pickpickdata\\pickpickdata\\q84sale_listings.json';
 
 async function main() {
   console.log(`Starting import from ${DATA_FILE}...`);

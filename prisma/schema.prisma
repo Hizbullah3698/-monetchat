@@ -17,6 +17,7 @@ datasource db {
 enum UserRole {
   buyer
   seller
+  admin
 }
 
 enum ProductStatus {
@@ -88,11 +89,15 @@ model User {
   countryCode       String    @default("KW") @map("country_code") @db.Char(2)
   regionId          Int?      @map("region_id")
   preferredLanguage String    @default("ar") @map("preferred_language") @db.Char(2)
-  isVerified        Boolean   @default(false) @map("is_verified")
-  isActive          Boolean   @default(true) @map("is_active")
-  lastLoginAt       DateTime? @map("last_login_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  verificationToken      String?   @map("verification_token") @db.VarChar(255)
+  verificationTokenExpires DateTime? @map("verification_token_expires")
+  resetToken               String?   @map("reset_token") @db.VarChar(255)
+  resetTokenExpires        DateTime? @map("reset_token_expires")
+  isVerified               Boolean   @default(false) @map("is_verified")
+  isActive                 Boolean   @default(true) @map("is_active")
+  lastLoginAt              DateTime? @map("last_login_at")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
 
   // Relations
   country      Country       @relation(fields: [countryCode], references: [code])
@@ -101,10 +106,25 @@ model User {
   chatSessions ChatSession[]
   searchLogs   SearchLog[]
   contactLogs  ContactLog[]
+  refreshTokens RefreshToken[]
 
   @@index([email])
   @@index([countryCode])
   @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique @db.VarChar(255)
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
 // ============================================

@@ -13,7 +13,7 @@ const qdrant = new QdrantClient({
 const PRODUCTS_COLLECTION = 'products';
 
 // Vector dimensions (Ollama nomic-embed-text)
-const VECTOR_SIZE = 768;
+const VECTOR_SIZE = 192;
 
 // ============================================
 // BM25 SPARSE TOKENIZER
@@ -116,6 +116,10 @@ export async function initializeQdrant(): Promise<void> {
       { field_name: 'price', field_schema: 'float' as const },
       { field_name: 'status', field_schema: 'keyword' as const },
       { field_name: 'region_id', field_schema: 'integer' as const },
+      { field_name: 'brand', field_schema: 'keyword' as const },
+      { field_name: 'model', field_schema: 'keyword' as const },
+      { field_name: 'year', field_schema: 'integer' as const },
+      { field_name: 'condition', field_schema: 'keyword' as const },
     ];
 
     for (const index of indexes) {
@@ -132,7 +136,7 @@ export async function initializeQdrant(): Promise<void> {
 // PRODUCT INDEXING
 // ============================================
 
-interface ProductPayload {
+export interface ProductPayload {
   product_id: string;
   seller_id: string;
   title: string;
@@ -145,6 +149,12 @@ interface ProductPayload {
   region_id?: number;
   status: string;
   created_at: string;
+  brand?: string;
+  model?: string;
+  year?: number;
+  condition?: string;
+  features?: string[];
+  semantic_summary?: string;
   [key: string]: unknown;
 }
 
@@ -180,15 +190,17 @@ export async function deleteProductFromIndex(productId: string): Promise<void> {
 // SEARCH
 // ============================================
 
-interface SearchFilters {
+export interface SearchFilters {
   country_code: string;
   category_slug?: string;
   min_price?: number;
   max_price?: number;
   region_id?: number;
+  brand?: string;
+  model?: string;
 }
 
-interface SearchResult {
+export interface SearchResult {
   id: string;
   score: number;
   payload: ProductPayload;
@@ -234,6 +246,14 @@ export async function searchProducts(
     if (filters.min_price !== undefined) range.gte = filters.min_price;
     if (filters.max_price !== undefined) range.lte = filters.max_price;
     must.push({ key: 'price', range });
+  }
+
+  if (filters.brand) {
+    must.push({ key: 'brand', match: { value: filters.brand } });
+  }
+
+  if (filters.model) {
+    must.push({ key: 'model', match: { value: filters.model } });
   }
 
   const filter = { must };

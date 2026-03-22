@@ -6,7 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
 
 const COLLECTION = 'products';
-const VECTOR_SIZE = 768; // Dimension for nomic-embed-text
+const VECTOR_SIZE = 192; // Dimension for nomic-embed-text (as observed from current Ollama instance)
 const BATCH_SIZE = 20;
 
 const qdrant = new QdrantClient({
@@ -145,18 +145,38 @@ async function main() {
   let indexed = 0;
   let failed = 0;
 
-  for (let i = 0; i < products.length; i += BATCH_SIZE) {
-    const batch = products.slice(i, i + BATCH_SIZE);
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(products.length / BATCH_SIZE);
+  const CONCURRENCY = 5;
+  for (let i = 0; i < products.length; i += CONCURRENCY) {
+    const batch = products.slice(i, i + CONCURRENCY);
+    const batchNum = Math.floor(i / CONCURRENCY) + 1;
+    const totalBatches = Math.ceil(products.length / CONCURRENCY);
     console.log(`Processing batch ${batchNum}/${totalBatches}...`);
 
     const points = await Promise.all(
       batch.map(async (product) => {
         try {
-          const searchText = `${product.title} ${product.description || ''}`.trim();
-          const embedding = await getEmbedding(searchText);
-          const sparseVector = textToSparseVector(searchText);
+          console.log(`  - Processing: ${product.title.slice(0, 30)}...`);
+          // --- RICH METADATA EXTRACTION ---
+          const metaPrompt = `Extract searchable keywords for this product: Brand, Model, Year, Category, Features.
+Title: ${product.title}
+Desc: ${product.description || 'N/A'}
+Keywords:`;
+
+          const metaResponse = await ollamaClient.chat.completions.create({
+            model: process.env.OLLAMA_CHAT_MODEL || 'llama3.1:8b',
+            messages: [{ role: 'system', content: metaPrompt }],
+            temperature: 0.1,
+            max_tokens: 100,
+          });
+
+          const keywords = metaResponse.choices[0].message.content || '';
+          const meta = { brand: '', model: '', year: null, features: [], semantic_summary: keywords };
+
+          // --- UNIFIED SEARCHABLE TEXT ---
+          const unifiedText = `${product.title} ${product.titleAr || ''} ${keywords} ${product.category?.slug || ''} ${product.condition} ${product.price} ${product.currency} ${product.description || ''} ${product.descriptionAr || ''}`.trim();
+
+          const embedding = await getEmbedding(unifiedText);
+          const sparseVector = textToSparseVector(unifiedText);
 
           return {
             id: product.id,
@@ -177,6 +197,13 @@ async function main() {
               region_id: product.regionId || undefined,
               status: product.status,
               created_at: product.createdAt.toISOString(),
+              // ENRICHED METADATA
+              brand: meta.brand || undefined,
+              model: meta.model || undefined,
+              year: meta.year || undefined,
+              condition: product.condition,
+              features: meta.features || [],
+              semantic_summary: meta.semantic_summary || undefined,
             },
           };
         } catch (err) {
@@ -187,9 +214,7 @@ async function main() {
       })
     );
 
-    const validPoints = points.filter(
-      (p): p is NonNullable<typeof p> => p !== null
-    );
+    const validPoints = points.filter((p): p is NonNullable<typeof p> => p !== null);
 
     if (validPoints.length > 0) {
       await qdrant.upsert(COLLECTION, {
@@ -198,13 +223,7 @@ async function main() {
       });
       indexed += validPoints.length;
     }
-
-    console.log(`  Indexed ${validPoints.length}/${batch.length} products.`);
-
-    // Rate limit delay between batches
-    if (i + BATCH_SIZE < products.length) {
-      await new Promise((r) => setTimeout(r, 500));
-    }
+    console.log(`  Indexed ${validPoints.length}/${batch.length}. Total: ${indexed}`);
   }
 
   // Step 5: Update qdrantPointId in database

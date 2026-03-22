@@ -1,79 +1,78 @@
-// Next.js Middleware - JWT-based authentication
-// Checks auth cookies for protected routes
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { verifyToken } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-super-secret-key-change-in-production'
-);
-const COOKIE_NAME = 'auth_token';
-
-// Routes that require authentication
-const protectedRoutes = ['/account', '/sell', '/messages', '/admin'];
-
-// Routes that require specific roles (admin only - any logged-in user can sell)
-const roleRules = [
-  { prefix: '/admin', roles: ['seller'] },
+// Add paths that require authentication
+const protectedPaths = [
+  '/api/user/profile',
+  '/api/products/create',
+  '/api/products/edit',
+  '/api/seller/dashboard',
 ];
 
-// Auth pages - redirect to /account if already logged in
-const authRoutes = ['/login', '/register', '/forgot-password'];
+// Add paths that require specific roles
+const roleProtectedPaths: Record<string, string[]> = {
+  '/api/seller': ['seller'],
+  '/api/admin': ['admin'],
+};
 
-async function verifyJWT(token: string) {
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET, {
-      issuer: 'Monetchat',
-      audience: 'Monetchat-users',
-    });
-    return payload as { userId: string; email: string; role: string };
-  } catch {
-    return null;
-  }
-}
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
 
-export async function middleware(request: NextRequest) {
-  const path = request.nextUrl.pathname;
-
-  const isProtectedRoute = protectedRoutes.some((route) => path.startsWith(route));
-  const isAuthRoute = authRoutes.some((route) => path.startsWith(route));
-
-  // No auth check needed for non-protected, non-auth routes
-  if (!isProtectedRoute && !isAuthRoute) {
-    return NextResponse.next();
-  }
-
-  // Get JWT from cookie
-  const token = request.cookies.get(COOKIE_NAME)?.value;
-  const user = token ? await verifyJWT(token) : null;
-
-  // Redirect unauthenticated users from protected routes to login
-  if (isProtectedRoute && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  // Role-based access control
-  if (user) {
-    const requiredRoles = roleRules.find((r) => path.startsWith(r.prefix))?.roles;
-    if (requiredRoles && !requiredRoles.includes(user.role)) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/account';
-      return NextResponse.redirect(url);
+  // Rate limiting for auth routes
+  if (pathname.startsWith('/api/auth/login') || pathname.startsWith('/api/auth/register')) {
+    const { allowed, retryAfter } = await checkRateLimit(ip, 'auth');
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': retryAfter.toString() } }
+      );
     }
   }
 
-  // Redirect authenticated users away from auth pages
-  if (isAuthRoute && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/account';
-    return NextResponse.redirect(url);
+  // Check if the path is protected
+  const isProtected = protectedPaths.some((path) => pathname.startsWith(path));
+  const requiredRoles = Object.entries(roleProtectedPaths).find(([path]) => 
+    pathname.startsWith(path)
+  )?.[1];
+
+  if (isProtected || requiredRoles) {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const payload = await verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+    }
+
+    // Role-based access control (RBAC)
+    if (requiredRoles && !requiredRoles.includes(payload.role as string)) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    // Pass user info to headers for downstream use
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-user-id', payload.userId as string);
+    requestHeaders.set('x-user-role', payload.role as string);
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/api/:path*',
+  ],
 };

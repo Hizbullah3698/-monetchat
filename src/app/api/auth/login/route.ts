@@ -1,115 +1,68 @@
-// User Login API
-// POST /api/auth/login
-
-import { NextRequest, NextResponse } from 'next/server';
-import { compare } from 'bcryptjs';
-import { z } from 'zod';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { generateToken, setAuthCookie } from '@/lib/auth/jwt';
-import { aiLimiter, getIp } from '@/lib/rate-limiter';
+import { comparePassword, signAccessToken, signRefreshToken } from '@/lib/auth';
+import { loginSchema } from '@/lib/validation/auth';
+import { ZodError } from 'zod';
 
-// Validation schema
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
-
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    // Rate limit: 20 attempts per hour per IP
-    const ip = getIp(request);
-    await aiLimiter.consume(ip, 1).catch(() => {
-      throw Object.assign(new Error('Too many requests'), { isRateLimit: true });
-    });
-
-    const body = await request.json();
+    const body = await req.json();
     const { email, password } = loginSchema.parse(body);
 
-    // Find user by email
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: {
-        seller: true,
+      where: { email },
+    });
+
+    if (!user || !(await comparePassword(password, user.passwordHash))) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+    }
+
+    if (!user.isVerified) {
+      return NextResponse.json({ error: 'Please verify your email first' }, { status: 403 });
+    }
+
+    if (!user.isActive) {
+      return NextResponse.json({ error: 'Your account is currently disabled' }, { status: 403 });
+    }
+
+    const accessToken = await signAccessToken({ userId: user.id, role: user.role, email: user.email });
+    const refreshToken = await signRefreshToken({ userId: user.id });
+
+    // Store refresh token in database (hashed)
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      );
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      return NextResponse.json(
-        { error: 'Account is deactivated' },
-        { status: 403 }
-      );
-    }
-
-    // Verify password
-    const isValidPassword = await compare(password, user.passwordHash);
-
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { error: 'Invalid credentials' },
-        { status: 401 }
-      );
-    }
-
-    // Update last login timestamp
+    // Update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
 
-    // Generate JWT token
-    const token = await generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
+    const response = NextResponse.json({
+      message: 'Login successful',
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      accessToken,
     });
 
-    // Set auth cookie
-    await setAuthCookie(token);
-
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        countryCode: user.countryCode,
-        preferredLanguage: user.preferredLanguage,
-        avatarUrl: user.avatarUrl,
-        seller: user.seller
-          ? {
-              phonePublic: user.seller.phonePublic,
-              businessName: user.seller.businessName,
-              isVerified: user.seller.isVerified,
-            }
-          : null,
-      },
-      token,
+    // Set refresh token in cookie (HttpOnly)
+    response.cookies.set('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
     });
+
+    return response;
   } catch (error) {
-    if (error instanceof Error && (error as { isRateLimit?: boolean }).isRateLimit) {
-      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: error.errors }, { status: 400 });
     }
-
     console.error('Login error:', error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: 'Login failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

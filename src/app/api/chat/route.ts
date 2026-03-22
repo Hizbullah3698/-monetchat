@@ -22,6 +22,8 @@ import {
 } from '@/lib/ai/tools';
 import { searchProducts, indexProduct, textToSparseVector } from '@/lib/qdrant/client';
 import { getPresignedReadUrl, getKeyFromUrl, CDN_URL } from '@/lib/s3/client';
+import { preprocessSearchQuery } from '@/lib/ai/query-preprocessor';
+import { rerankSearchResults } from '@/lib/ai/reranker';
 
 // SSE helper: format an event for the stream
 function sseEvent(event: string, data: unknown): string {
@@ -189,49 +191,6 @@ export async function POST(request: NextRequest) {
             text: language === 'ar' ? 'جاري التفكير...' : 'Thinking...',
           });
 
-          // Temporary direct path for plain text requests to avoid tool-loop hangs
-          if (userQuery && !image_url && !voice_transcript) {
-            console.log('[CHAT] direct text path hit:', userQuery);
-
-            let quickText = '';
-            
-            try {
-              const streamCompletion = await ollamaClient.chat.completions.create({
-                model: process.env.OLLAMA_CHAT_MODEL || 'qwen2.5:7b',
-                messages: [
-                  { role: 'system', content: generateSystemPrompt(countryCode, language) },
-                  { role: 'user', content: userQuery }
-                ],
-                stream: true,
-                max_tokens: 120,
-                temperature: 0.7,
-              });
-
-              for await (const chunk of streamCompletion) {
-                const tok = chunk.choices[0]?.delta?.content;
-                if (tok) {
-                  if (!quickText) safeEnqueue('status', { text: '' });
-                  quickText += tok;
-                  safeEnqueue('delta', { content: tok });
-                }
-              }
-            } catch (err) {
-              console.error('[CHAT] direct text path streaming error:', err);
-            }
-
-            if (!quickText) {
-              quickText = language === 'ar'
-                ? 'مرحباً! كيف يمكنني مساعدتك؟'
-                : 'Hello! How can I help you?';
-              safeEnqueue('status', { text: '' });
-              safeEnqueue('delta', { content: quickText });
-            }
-
-            safeEnqueue('done', { session_id: sessionId, error: false });
-            safeClose();
-            return;
-          }
-
           // ============================
           // FULLY STREAMING TOOL CALLING LOOP
           // Every OpenAI call uses stream:true so text arrives token-by-token
@@ -363,7 +322,8 @@ export async function POST(request: NextRequest) {
                       const searchResult = await executeSearchProducts(
                         toolArgs as SearchProductsParams,
                         countryCode,
-                        regionId
+                        regionId,
+                        language
                       );
                       products = searchResult.products;
                       searchQuery = (toolArgs as SearchProductsParams).search_query;
@@ -658,115 +618,98 @@ export async function POST(request: NextRequest) {
 async function executeSearchProducts(
   args: SearchProductsParams,
   countryCode: string,
-  regionId?: number
+  regionId?: number,
+  language: 'ar' | 'en' = 'en'
 ): Promise<{ products: Array<Record<string, unknown>>; count: number }> {
-  // Generate dense embedding + sparse BM25 vector from search query
-  const embedding = await getTextEmbedding(args.search_query);
-  const sparseVector = textToSparseVector(args.search_query);
+  // 1. QUERY PREPROCESSING (Normalization, Expansion, Filter Extraction)
+  const { expandedQuery, structuredFilters } = await preprocessSearchQuery(args.search_query, language);
+  
+  // Merge AI-extracted filters with explicit user filters
+  const finalFilters = {
+    country_code: countryCode,
+    category_slug: args.category || structuredFilters.category,
+    min_price: args.min_price || structuredFilters.min_price,
+    max_price: args.max_price || structuredFilters.max_price,
+    region_id: args.region_id || regionId,
+    brand: structuredFilters.brand,
+    model: structuredFilters.model,
+  };
 
-  // Build filters
-  const filters: Record<string, unknown> = { country_code: countryCode };
-  if (args.category) filters.category_slug = args.category;
-  if (args.min_price) filters.min_price = args.min_price;
-  if (args.max_price) filters.max_price = args.max_price;
-  if (regionId || args.region_id) filters.region_id = args.region_id || regionId;
+  // 2. EMBEDDINGS (Dense + Sparse)
+  const embedding = await getTextEmbedding(expandedQuery);
+  const sparseVector = textToSparseVector(expandedQuery);
 
-  // Hybrid search: dense (semantic) + sparse (BM25 keyword) via RRF fusion
+  // 3. HYBRID SEARCH (Qdrant RRF)
+  // Fetch top 50 candidates for reranking
   const searchResults = await searchProducts(
     embedding,
     sparseVector,
-    filters as {
-      country_code: string;
-      category_slug?: string;
-      min_price?: number;
-      max_price?: number;
-      region_id?: number;
-    },
-    10
+    finalFilters as any,
+    50
   );
 
-  // Get full product details from database
-  const productIds = searchResults.map((r) => r.payload.product_id);
-
-  if (productIds.length === 0) {
+  if (searchResults.length === 0) {
     return { products: [], count: 0 };
   }
 
+  // 4. METADATA REFINEMENT / RERANKING
+  const reranked = rerankSearchResults(
+    searchResults,
+    args.search_query, 
+    expandedQuery,
+    finalFilters
+  );
+
+  // 5. FETCH FULL PROJECT DETAILS FROM DB
+  const top10Ids = reranked.slice(0, 10).map((r) => r.payload.product_id);
+
   const dbProducts = await prisma.product.findMany({
-    where: { id: { in: productIds } },
+    where: { id: { in: top10Ids } },
     include: {
-      images: {
-        where: { isPrimary: true },
-        take: 1,
-      },
+      images: { where: { isPrimary: true }, take: 1 },
       seller: {
         select: {
           businessName: true,
           phonePublic: true,
           whatsappNumber: true,
-          user: {
-            select: { name: true },
-          },
+          user: { select: { name: true } },
         },
       },
-      region: {
-        select: { name: true, nameAr: true },
-      },
-      category: {
-        select: { slug: true, name: true, nameAr: true },
-      },
+      region: { select: { name: true, nameAr: true } },
+      category: { select: { slug: true, name: true, nameAr: true } },
     },
   });
 
-  // Map products preserving RRF ranking order from Qdrant
-  const allProducts = searchResults
-    .map((sr) => {
-      const p = dbProducts.find((db) => db.id === sr.payload.product_id);
-      if (!p) return null;
+  // Maintain reranked order
+  const products = top10Ids.map((id) => {
+    const p = dbProducts.find((db) => db.id === id);
+    if (!p) return null;
 
-      return {
-        id: p.id,
-        title: p.title,
-        title_ar: p.titleAr,
-        description: p.description || null,
-        description_ar: p.descriptionAr || null,
-        price: Number(p.price),
-        currency: p.currency,
-        condition: p.condition,
-        is_negotiable: p.isNegotiable,
-        image_url: p.images[0]?.url || null,
-        category: p.category
-          ? { slug: p.category.slug, name: p.category.name, name_ar: p.category.nameAr }
-          : null,
-        seller: {
-          name: p.seller.businessName || p.seller.user.name,
-          phone: p.seller.phonePublic,
-          whatsapp: p.seller.whatsappNumber,
-        },
-        location: p.region ? { region: p.region.name, region_ar: p.region.nameAr } : null,
-        similarity_score: sr.score,
-      };
-    })
-    .filter((p): p is NonNullable<typeof p> => p !== null);
-
-  // Filter out results with zero keyword overlap in title
-  // Fallback to all results if filter removes everything (handles vague queries like "car")
-  const queryLower = args.search_query.toLowerCase();
-  const queryTerms = queryLower.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 2);
-
-  let products = allProducts;
-  if (queryTerms.length >= 1) {
-    const filtered = allProducts.filter((p) => {
-      const titleText = `${p.title} ${p.title_ar || ''}`.toLowerCase();
-      return queryTerms.some((term) => titleText.includes(term));
-    });
-    if (filtered.length > 0) {
-      products = filtered;
-    }
-  }
+    return {
+      id: p.id,
+      title: p.title,
+      title_ar: p.titleAr,
+      description: p.description || null,
+      description_ar: p.descriptionAr || null,
+      price: Number(p.price),
+      currency: p.currency,
+      condition: p.condition,
+      is_negotiable: p.isNegotiable,
+      image_url: p.images[0]?.url || null,
+      category: p.category
+        ? { slug: p.category.slug, name: p.category.name, name_ar: p.category.nameAr }
+        : null,
+      seller: {
+        name: p.seller.businessName || p.seller.user.name,
+        phone: p.seller.phonePublic,
+        whatsapp: p.seller.whatsappNumber,
+      },
+      location: p.region ? { region: p.region.name, region_ar: p.region.nameAr } : null,
+    };
+  }).filter(Boolean);
 
   return {
-    products,
+    products: products as any[],
     count: products.length,
   };
 }
