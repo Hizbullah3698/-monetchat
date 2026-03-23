@@ -1,14 +1,14 @@
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
+import { env } from '@/lib/env';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
 const ACCESS_TOKEN_EXPIRES = '15m';
 const REFRESH_TOKEN_EXPIRES = '7d';
 
-const secret = new TextEncoder().encode(JWT_SECRET);
+const secret = new TextEncoder().encode(env.JWT_SECRET);
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, 12);
 }
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {

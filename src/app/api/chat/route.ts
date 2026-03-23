@@ -11,8 +11,8 @@ import {
   analyzeImageForListing,
   generateSystemPrompt,
   translateProductFields,
-  ollamaClient,
-} from '@/lib/ai/openai';
+} from '@/lib/ai/ai-service';
+import { AiFactory } from '@/lib/ai/ai-factory';
 import {
   getToolDefinitions,
   type SearchProductsParams,
@@ -199,13 +199,12 @@ export async function POST(request: NextRequest) {
           while (iterations < maxIterations) {
             iterations++;
 
-            const streamCompletion = await ollamaClient.chat.completions.create({
-              model: process.env.OLLAMA_CHAT_MODEL || 'llama3.1:8b',
+            const streamCompletion = await AiFactory.getProvider().createChatCompletionStream({
+              model: AiFactory.getProvider().getDefaultChatModel(),
               messages,
-              tools: getToolDefinitions(),
+              tools: getToolDefinitions() as any,
               tool_choice: 'auto',
               temperature: 0.7,
-              stream: true,
             });
 
             // Accumulate streamed response: could be tool calls OR text

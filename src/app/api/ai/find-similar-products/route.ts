@@ -1,9 +1,60 @@
 // Find Similar Products API - Qdrant hybrid vector search
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { getTextEmbedding } from '@/lib/ai/openai';
+import { getTextEmbedding } from '@/lib/ai/ai-service';
 import { searchProducts, textToSparseVector } from '@/lib/qdrant/client';
 
+/**
+ * @openapi
+ * /api/ai/find-similar-products:
+ *   post:
+ *     summary: Find similar products using Qdrant hybrid vector search
+ *     tags: [AI, Search]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               productId:
+ *                 type: string
+ *               query:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: List of similar products and their similarity scores
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       title:
+ *                         type: string
+ *                       price:
+ *                         type: number
+ *                       currency:
+ *                         type: string
+ *                       image_url:
+ *                         type: string
+ *                       score:
+ *                         type: number
+ *       400:
+ *         description: productId or query required
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Search Error
+ */
 export async function POST(request: Request) {
   try {
     const { productId, query: textQuery } = await request.json();

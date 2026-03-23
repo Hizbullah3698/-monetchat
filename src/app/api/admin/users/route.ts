@@ -1,116 +1,187 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+/**
+ * @openapi
+ * /api/admin/users:
+ *   get:
+ *     summary: Search and list users (Admin only)
+ *     tags: [Admin, Users]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema: { type: string }
+ *       - in: query
+ *         name: role
+ *         schema: { type: string, enum: [buyer, seller, admin] }
+ *       - in: query
+ *         name: isActive
+ *         schema: { type: boolean }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: List of users
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
+import { z } from 'zod';
+import { prisma } from '@/lib/db/prisma';
 import { hashPassword } from '@/lib/auth';
+import { createApiHandler } from '@/lib/api/handler';
+import { paginationSchema, getPaginationParams, formatPaginatedResponse } from '@/lib/api/pagination';
+import { ValidationError, ConflictError } from '@/lib/api/errors/AppError';
+import { AuditLogService } from '@/lib/services/audit-service';
 
-/**
- * GET /api/admin/users
- * Search and list users with filters and pagination
- */
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const query = searchParams.get('q') || '';
-    const role = searchParams.get('role');
-    const isActive = searchParams.get('isActive');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const skip = (page - 1) * limit;
+// GET: List users with filters
+export const GET = createApiHandler(async (req, { query }) => {
+  const { page, limit, q, role, isActive } = query;
+  const { skip, take } = getPaginationParams({ page, limit, order: 'desc' });
 
-    const where: any = {};
+  const where: any = {};
 
-    if (query) {
-      where.OR = [
-        { name: { contains: query, mode: 'insensitive' } },
-        { email: { contains: query, mode: 'insensitive' } },
-        { phone: { contains: query, mode: 'insensitive' } },
-      ];
-    }
+  if (q) {
+    where.OR = [
+      { name: { contains: q, mode: 'insensitive' } },
+      { email: { contains: q, mode: 'insensitive' } },
+      { phone: { contains: q, mode: 'insensitive' } },
+    ];
+  }
 
-    if (role) {
-      where.role = role;
-    }
+  if (role) {
+    where.role = role;
+  }
 
-    if (isActive !== null && isActive !== undefined) {
-      where.isActive = isActive === 'true';
-    }
+  if (isActive !== undefined) {
+    where.isActive = isActive;
+  }
 
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          nameAr: true,
-          phone: true,
-          role: true,
-          isActive: true,
-          isVerified: true,
-          createdAt: true,
-          lastLoginAt: true,
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip: skip,
+      take: take,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        nameAr: true,
+        phone: true,
+        role: {
+          select: { name: true }
         },
-      }),
-      prisma.user.count({ where }),
-    ]);
-
-    return NextResponse.json({
-      users,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        isActive: true,
+        isVerified: true,
+        createdAt: true,
+        lastLoginAt: true,
       },
-    });
-  } catch (error) {
-    console.error('[ADMIN_USERS_GET]', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    } as any),
+    prisma.user.count({ where }),
+  ]);
+
+  // Flatten role name for response consistency
+  const transformedUsers = users.map(u => ({
+    ...u,
+    role: (u.role as any).name
+  }));
+
+  return formatPaginatedResponse(transformedUsers, total, { page, limit, order: 'desc' });
+}, {
+  roles: ['admin'],
+  querySchema: paginationSchema.extend({
+    q: z.string().optional(),
+    role: z.string().optional(),
+    isActive: z.preprocess((val) => val === 'true' ? true : val === 'false' ? false : undefined, z.boolean().optional()),
+  })
+});
 
 /**
- * POST /api/admin/users
- * Create a new user (admin-initiated)
+ * @openapi
+ * /api/admin/users:
+ *   post:
+ *     summary: Create a new user (Admin initiated)
+ *     tags: [Admin, Users]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateUserInput'
+ *     responses:
+ *       201:
+ *         description: User created successfully
  */
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email, password, name, role, isActive, countryCode } = body;
+const createUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string(),
+  role: z.string().default('buyer'),
+  isActive: z.boolean().default(true),
+  countryCode: z.string().default('KW'),
+});
 
-    if (!email || !password || !name) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
+export const POST = createApiHandler(async (req, { body, user: adminUser }) => {
+  const { email, password, name, role, isActive, countryCode } = body as z.infer<typeof createUserSchema>;
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+  // Check if user already exists
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
 
-    if (existingUser) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
-    }
-
-    const hashedPassword = await hashPassword(password);
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash: hashedPassword,
-        name,
-        role: role || 'buyer',
-        isActive: isActive !== undefined ? isActive : true,
-        isVerified: true, // Admin-created users are pre-verified
-        countryCode: countryCode || 'KW',
-      },
-    });
-
-    const { passwordHash, ...userWithoutPassword } = user;
-    return NextResponse.json(userWithoutPassword, { status: 201 });
-  } catch (error) {
-    console.error('[ADMIN_USERS_POST]', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  if (existingUser) {
+    throw new ConflictError('User already exists');
   }
-}
+
+  // Find the role first
+  const dbRole = await (prisma as any).role.findUnique({
+    where: { name: role },
+  });
+
+  if (!dbRole) {
+    throw new ValidationError(`Role '${role}' not found`);
+  }
+
+  const hashedPassword = await hashPassword(password);
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      passwordHash: hashedPassword,
+      name,
+      roleId: dbRole.id,
+      isActive: isActive,
+      isVerified: true,
+      countryCode: countryCode,
+    },
+    include: {
+      role: { select: { name: true } }
+    }
+  });
+
+  await AuditLogService.logAction({
+    userId: adminUser?.userId,
+    action: 'CREATE',
+    entityName: 'User',
+    entityId: user.id,
+    changes: { email, name, role, isActive, countryCode },
+    ipAddress: req.headers.get('x-forwarded-for') || undefined,
+    userAgent: req.headers.get('user-agent') || undefined,
+  });
+
+  const { passwordHash, ...userWithoutPassword } = user as any;
+  return {
+    ...userWithoutPassword,
+    role: (user.role as any).name
+  };
+}, {
+  roles: ['admin'],
+  bodySchema: createUserSchema
+});

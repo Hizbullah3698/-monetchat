@@ -1,3 +1,27 @@
+/**
+ * @openapi
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     tags: [Auth]
+ *     description: Uses the httpOnly refresh token cookie to get a new access token
+ *     responses:
+ *       200:
+ *         description: Token refreshed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 accessToken:
+ *                   type: string
+ *       401:
+ *         description: Invalid or expired refresh token
+ *       500:
+ *         description: Internal server error
+ */
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db/prisma';

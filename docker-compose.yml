@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: Monetchat_postgres
     restart: unless-stopped
     environment:
@@ -24,6 +24,15 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  redis:
+    image: redis:7-alpine
+    container_name: Monetchat_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   app:
     build:
       context: .
@@ -33,33 +42,40 @@ services:
     depends_on:
       - postgres
       - qdrant
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - redis
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://Monetchatuser:Monetchatpassword@postgres:5432/Monetchat
       QDRANT_URL: http://qdrant:6333
-      OLLAMA_BASE_URL: http://192.168.192.1:11434
-      OLLAMA_CHAT_MODEL: qwen2.5:7b
-      NEXTAUTH_URL: https://chatsoq.com
-      NEXTAUTH_SECRET: "gBsjAQE8qJNFc5P1zhKNFeeJtdabJxPE9Q7NSt3HBesJCqkXs14CFlak3rJegCMw"
-      OPENAI_API_KEY: your_openai_api_key_here
-      NEXT_PUBLIC_APP_URL: https://chatsoq.com
-      PORT: 3000
-      QDRANT_API_KEY: ""
-      AWS_REGION: me-south-1
-      AWS_ACCESS_KEY_ID: your_access_key
-      AWS_SECRET_ACCESS_KEY: your_secret_key
-      S3_BUCKET_NAME: Monetchat-media
-      S3_CDN_URL: https://Monetchat-media.s3.me-south-1.amazonaws.com
-      JWT_SECRET: "gBsjAQE8qJNFc5P1zhKNFeeJtdabJxPE9Q7NSt3HBesJCqkXs14CFlak3rJegCMw"
-      JWT_EXPIRES_IN: 24h
-      DEFAULT_COUNTRY: KW
-      DEFAULT_CURRENCY: KWD
-      DEFAULT_LANGUAGE: ar
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: Monetchat_worker
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - qdrant
+      - redis
+    ports:
+      - "4501:4501"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://Monetchatuser:Monetchatpassword@postgres:5432/Monetchat
+      QDRANT_URL: http://qdrant:6333
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
 volumes:
   postgres_data:
   qdrant_data:
+  redis_data:

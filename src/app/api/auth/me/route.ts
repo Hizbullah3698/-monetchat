@@ -1,6 +1,47 @@
-// Current User API
-// GET /api/auth/me - Get current user profile
-// PATCH /api/auth/me - Update current user profile
+/**
+ * @openapi
+ * /api/auth/me:
+ *   get:
+ *     summary: Get current authenticated user profile
+ *     tags: [Auth]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Current user profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized
+ *   patch:
+ *     summary: Update current user profile
+ *     tags: [Auth]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: User profile updated
+ *       400:
+ *         description: Validation failed
+ *       401:
+ *         description: Unauthorized
+ */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/jwt';
@@ -19,6 +60,15 @@ export async function GET() {
     const user = await prisma.user.findUnique({
       where: { id: tokenPayload.userId },
       include: {
+        role: {
+          include: {
+            permissions: {
+              include: {
+                permission: true,
+              },
+            },
+          },
+        },
         seller: true,
         country: {
           select: {
@@ -41,7 +91,8 @@ export async function GET() {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: user.role.name,
+        permissions: user.role.permissions.map((rp) => rp.permission.name),
         countryCode: user.countryCode,
         preferredLanguage: user.preferredLanguage,
         avatarUrl: user.avatarUrl,

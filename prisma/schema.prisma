@@ -14,14 +14,10 @@ datasource db {
 // ENUMS
 // ============================================
 
-enum UserRole {
-  buyer
-  seller
-  admin
-}
 
 enum ProductStatus {
   active
+  pending
   sold
   expired
   rejected
@@ -33,6 +29,23 @@ enum ProductCondition {
   good
   fair
   poor
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  LOGIN
+  LOGOUT
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  SYSTEM
 }
 
 // ============================================
@@ -85,7 +98,8 @@ model User {
   phone             String?   @db.VarChar(20)
   nationalId        String?   @map("national_id") @db.VarChar(20)
   avatarUrl         String?   @map("avatar_url") @db.VarChar(512)
-  role              UserRole  @default(buyer)
+  roleId            String    @map("role_id")
+  role              Role      @relation(fields: [roleId], references: [id])
   countryCode       String    @default("KW") @map("country_code") @db.Char(2)
   regionId          Int?      @map("region_id")
   preferredLanguage String    @default("ar") @map("preferred_language") @db.Char(2)
@@ -98,6 +112,9 @@ model User {
   lastLoginAt              DateTime? @map("last_login_at")
   createdAt                DateTime  @default(now()) @map("created_at")
   updatedAt                DateTime  @updatedAt @map("updated_at")
+  deletedAt                DateTime? @map("deleted_at")
+  createdById              String?   @map("created_by_id")
+  updatedById              String?   @map("updated_by_id")
 
   // Relations
   country      Country       @relation(fields: [countryCode], references: [code])
@@ -107,6 +124,27 @@ model User {
   searchLogs   SearchLog[]
   contactLogs  ContactLog[]
   refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  attachments   Attachment[]
+
+  // Audit Relations
+  creator       User?     @relation("UserAuditCreator", fields: [createdById], references: [id])
+  createdBy     User[]    @relation("UserAuditCreator")
+  updator       User?     @relation("UserAuditUpdator", fields: [updatedById], references: [id])
+  updatedBy     User[]    @relation("UserAuditUpdator")
+
+  // Other entities audit relations
+  createdRoles       Role[]       @relation("RoleCreator")
+  updatedRoles       Role[]       @relation("RoleUpdator")
+  createdPermissions Permission[] @relation("PermissionCreator")
+  updatedPermissions Permission[] @relation("PermissionUpdator")
+  createdCategories  Category[]   @relation("CategoryCreator")
+  updatedCategories  Category[]   @relation("CategoryUpdator")
+  createdProducts    Product[]    @relation("ProductCreator")
+  updatedProducts    Product[]    @relation("ProductUpdator")
+  createdSellers     Seller[]     @relation("SellerCreator")
+  updatedSellers     Seller[]     @relation("SellerUpdator")
 
   @@index([email])
   @@index([countryCode])
@@ -146,10 +184,15 @@ model Seller {
   isProfileComplete  Boolean  @default(false) @map("is_profile_complete")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+  createdById        String?   @map("created_by_id")
+  updatedById        String?   @map("updated_by_id")
 
   // Relations
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   products Product[]
+  creator  User?     @relation("SellerCreator", fields: [createdById], references: [id])
+  updator  User?     @relation("SellerUpdator", fields: [updatedById], references: [id])
 
   @@map("sellers")
 }
@@ -167,11 +210,16 @@ model Category {
   icon      String?   @db.VarChar(50)
   isActive  Boolean   @default(true) @map("is_active")
   sortOrder Int       @default(0) @map("sort_order")
+  deletedAt DateTime? @map("deleted_at")
+  createdById String?   @map("created_by_id")
+  updatedById String?   @map("updated_by_id")
 
   // Relations
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children Category[] @relation("CategoryHierarchy")
   products Product[]
+  creator  User?      @relation("CategoryCreator", fields: [createdById], references: [id])
+  updator  User?      @relation("CategoryUpdator", fields: [updatedById], references: [id])
 
   @@map("categories")
 }
@@ -219,7 +267,10 @@ model Product {
   // Timestamps
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
   expiresAt       DateTime         @default(dbgenerated("NOW() + INTERVAL '30 days'")) @map("expires_at")
+  createdById     String?          @map("created_by_id")
+  updatedById     String?          @map("updated_by_id")
 
   // Relations
   seller      Seller         @relation(fields: [sellerId], references: [userId], onDelete: Cascade)
@@ -228,6 +279,8 @@ model Product {
   region      Region?        @relation(fields: [regionId], references: [id])
   images      ProductImage[]
   contactLogs ContactLog[]
+  creator     User?          @relation("ProductCreator", fields: [createdById], references: [id])
+  updator     User?          @relation("ProductUpdator", fields: [updatedById], references: [id])
 
   @@index([sellerId])
   @@index([categoryId])
@@ -322,6 +375,55 @@ model ProhibitedKeyword {
 }
 
 // ============================================
+// ROLES & PERMISSIONS
+// ============================================
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  deletedAt   DateTime?        @map("deleted_at")
+  createdById String?          @map("created_by_id")
+  updatedById String?          @map("updated_by_id")
+
+  creator     User?            @relation("RoleCreator", fields: [createdById], references: [id])
+  updator     User?            @relation("RoleUpdator", fields: [updatedById], references: [id])
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  deletedAt   DateTime?        @map("deleted_at")
+  createdById String?          @map("created_by_id")
+  updatedById String?          @map("updated_by_id")
+
+  creator     User?            @relation("PermissionCreator", fields: [createdById], references: [id])
+  updator     User?            @relation("PermissionUpdator", fields: [updatedById], references: [id])
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String          @map("role_id")
+  permissionId String          @map("permission_id")
+  role         Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ============================================
 // ANALYTICS & LOGS
 // ============================================
 
@@ -358,4 +460,88 @@ model ContactLog {
   session ChatSession? @relation(fields: [sessionId], references: [id])
 
   @@map("contact_logs")
+}
+
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  entityName  String      @map("entity_name")
+  entityId    String      @map("entity_id")
+  action      AuditAction
+  userId      String?     @map("user_id")
+  changes     Json?
+  ipAddress   String?     @map("ip_address")
+  userAgent   String?     @map("user_agent")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityName, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  title     String
+  body      String
+  type      NotificationType @default(INFO)
+  isRead    Boolean          @default(false) @map("is_read")
+  metadata  Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================
+// ATTACHMENTS
+// ============================================
+
+model Attachment {
+  id          String   @id @default(uuid())
+  fileName    String   @map("file_name")
+  fileType    String   @map("file_type")
+  fileSize    Int      @map("file_size")
+  url         String
+  s3Key       String?  @map("s3_key")
+  entityType  String?  @map("entity_type") // e.g., 'Product', 'User'
+  entityId    String?  @map("entity_id")
+  uploadedBy  String?  @map("uploaded_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@map("attachments")
+}
+
+// ============================================
+// NOTIFICATION JOBS (QUEUE)
+// ============================================
+
+model NotificationJob {
+  id        String   @id @default(uuid())
+  type      String   // e.g., 'email', 'system'
+  payload   Json     // contains user id, message, etc.
+  status    String   // 'pending', 'processing', 'completed', 'failed'
+  error     String?  @db.Text
+  retryCount Int     @default(0) @map("retry_count")
+  runAt     DateTime @default(now()) @map("run_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, runAt])
+  @@map("notification_jobs")
 }

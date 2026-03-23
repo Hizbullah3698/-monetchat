@@ -1,3 +1,36 @@
+/**
+ * @openapi
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Request password reset
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Reset request received
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Validation error
+ *       500:
+ *         description: Internal server error
+ */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { generateToken } from '@/lib/auth';

@@ -1,4 +1,4 @@
-import { chatWithProducts } from "../src/lib/ai/openai";
+import { chatWithProducts } from "../src/lib/ai/ai-service";
 
 async function main() {
   console.log("=== Testing Chat Flow ===");

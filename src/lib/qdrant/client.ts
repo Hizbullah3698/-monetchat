@@ -223,7 +223,8 @@ export async function searchProducts(
   queryEmbedding: number[],
   querySparseVector: SparseVectorData,
   filters: SearchFilters,
-  limit: number = 10
+  limit: number = 10,
+  offset: number = 0
 ): Promise<SearchResult[]> {
   await ensureCollection();
 
@@ -279,6 +280,7 @@ export async function searchProducts(
     ],
     query: { fusion: 'rrf' },
     limit,
+    offset,
     with_payload: true,
   });
 

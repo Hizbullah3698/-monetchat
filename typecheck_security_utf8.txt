@@ -1,0 +1,68 @@
+﻿scripts/create-admin.ts(14,7): error TS2559: Type 'string' has no properties in common with type 'RoleUpdateOneRequiredWithoutUsersNestedInput'.
+scripts/create-admin.ts(22,7): error TS2559: Type 'string' has no properties in common with type 'RoleCreateNestedOneWithoutUsersInput'.
+scripts/import-q84-data.ts(73,9): error TS2559: Type 'string' has no properties in common with type 'RoleCreateNestedOneWithoutUsersInput'.
+scripts/test-admin-api.ts(17,16): error TS2339: Property 'role' does not exist on type '{ id: string; createdAt: Date; name: string; email: string; isActive: boolean; passwordHash: string; nameAr: string | null; phone: string | null; nationalId: string | null; avatarUrl: string | null; ... 13 more ...; updatedById: string | null; }'.
+src/app/api/admin/audit-logs/route.ts(8,48): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/audit-logs/route.ts(8,54): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/audit-logs/route.ts(28,49): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/audit-logs/route.ts(28,55): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/contact-logs/route.ts(8,48): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/contact-logs/route.ts(8,54): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/contact-logs/route.ts(29,49): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/contact-logs/route.ts(29,55): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/products/route.ts(8,48): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/products/route.ts(8,54): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/products/route.ts(64,64): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/products/route.ts(64,70): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/search-logs/route.ts(8,48): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/search-logs/route.ts(8,54): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/search-logs/route.ts(27,49): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/search-logs/route.ts(27,55): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/users/route.ts(44,48): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/users/route.ts(44,54): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/users/route.ts(91,14): error TS2339: Property 'role' does not exist on type '{ id: string; createdAt: Date; name: string; email: string; isActive: boolean; passwordHash: string; nameAr: string | null; phone: string | null; nationalId: string | null; avatarUrl: string | null; ... 13 more ...; updatedById: string | null; }'.
+src/app/api/admin/users/route.ts(94,61): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/admin/users/route.ts(94,67): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/auth/refresh/route.ts(31,80): error TS2339: Property 'role' does not exist on type '{ id: string; createdAt: Date; name: string; email: string; isActive: boolean; passwordHash: string; nameAr: string | null; phone: string | null; nationalId: string | null; avatarUrl: string | null; ... 13 more ...; updatedById: string | null; }'.
+src/app/api/products/route.ts(52,5): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/route.ts(53,5): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/route.ts(155,5): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/route.ts(156,5): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/route.ts(240,15): error TS2559: Type 'string' has no properties in common with type 'RoleUpdateOneRequiredWithoutUsersNestedInput'.
+src/app/api/products/search/route.ts(69,56): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/search/route.ts(69,62): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/search/route.ts(96,45): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/search/route.ts(96,51): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/search/route.ts(164,69): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/products/search/route.ts(164,75): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/app/api/seller/profile/route.ts(110,15): error TS2559: Type 'string' has no properties in common with type 'RoleUpdateOneRequiredWithoutUsersNestedInput'.

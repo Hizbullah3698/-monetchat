@@ -13,6 +13,46 @@ import { NextResponse } from 'next/server';
 // A broken AI call is less functional than a perfect Mock.
 // I will add a comment about enabling real AI.
 
+/**
+ * @openapi
+ * /api/ai/extract-product-details:
+ *   post:
+ *     summary: Extract product details from an image (Smart Listing)
+ *     tags: [AI]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - imageUrl
+ *             properties:
+ *               imageUrl:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Structured product data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 title:
+ *                   type: string
+ *                 description:
+ *                   type: string
+ *                 category:
+ *                   type: string
+ *                 condition:
+ *                   type: string
+ *                 attributes:
+ *                   type: object
+ *       500:
+ *         description: AI Error
+ */
 export async function POST(request: Request) {
     try {
         const { imageUrl } = await request.json();

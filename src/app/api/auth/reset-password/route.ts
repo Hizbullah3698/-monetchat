@@ -1,3 +1,32 @@
+/**
+ * @openapi
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               token:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid or expired reset token
+ *       500:
+ *         description: Internal server error
+ */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { hashPassword } from '@/lib/auth';

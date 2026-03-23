@@ -31,5 +31,13 @@ export async function register() {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any;
         }
+
+        // Start notification worker
+        try {
+            const { workerService } = await import('@/services/worker.service');
+            workerService.start(10000); // Poll every 10 seconds
+        } catch (e) {
+            console.error('Failed to start worker service:', e);
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { ollamaClient } from "./openai";
+import { AiFactory } from "./ai-factory";
 
 /**
  * Preprocess and expand a raw user search query to improve semantic retrieval.
@@ -47,8 +47,8 @@ OUTPUT FORMAT (JSON):
 Return ONLY valid JSON.`;
 
   try {
-    const response = await ollamaClient.chat.completions.create({
-      model: process.env.OLLAMA_CHAT_MODEL || "llama3.1:8b",
+    const response = await AiFactory.getProvider().createChatCompletion({
+      model: AiFactory.getProvider().getDefaultChatModel(),
       messages: [{ role: "system", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.2,

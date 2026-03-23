@@ -1,3 +1,28 @@
+/**
+ * @openapi
+ * /api/auth/verify-email:
+ *   post:
+ *     summary: Verify email address
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *             properties:
+ *               token:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email verified successfully
+ *       400:
+ *         description: Invalid or expired verification token
+ *       500:
+ *         description: Internal server error
+ */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { verifyEmailSchema } from '@/lib/validation/auth';

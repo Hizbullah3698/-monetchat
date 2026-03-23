@@ -30,7 +30,7 @@ const BUCKET = process.env.S3_BUCKET_NAME || 'Monetchat-media';
 const CDN_URL = process.env.S3_CDN_URL || `https://s3.${process.env.AWS_REGION || 'me-south-1'}.amazonaws.com/${BUCKET}`;
 
 // Folder types
-type FolderType = 'products' | 'profiles' | 'temp' | 'chat';
+type FolderType = 'products' | 'profiles' | 'temp' | 'chat' | 'documents';
 
 // ============================================
 // UPLOAD FUNCTIONS
@@ -191,6 +191,9 @@ export function getExtensionFromContentType(contentType: string): string {
     'audio/webm': 'webm',
     'audio/mp4': 'm4a',
     'audio/mpeg': 'mp3',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   };
   return map[contentType] || 'bin';
 }

@@ -7,9 +7,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/jwt';
-import { deleteProductFromIndex, indexProduct, textToSparseVector } from '@/lib/qdrant/client';
-import { getTextEmbedding } from '@/lib/ai/openai';
+import { enqueueIndexProduct, enqueueRemoveProduct } from '@/jobs/indexing.job';
+import { CacheService } from '@/lib/cache';
 
+const PRODUCT_DETAIL_CACHE_TTL = 3600; // 1 hour
+
+/**
+ * @openapi
+ * /api/products/{id}:
+ *   get:
+ *     summary: Get product details
+ *     tags: [Products]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Product details
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Failed to fetch product
+ */
 // GET: Get product details
 export async function GET(
   request: NextRequest,
@@ -17,6 +39,17 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
+
+    const cacheKey = `products:detail:${id}`;
+    const cachedProduct = await CacheService.get(cacheKey);
+    if (cachedProduct) {
+      // Fire and forget view increment in background
+      prisma.product.update({
+        where: { id },
+        data: { viewCount: { increment: 1 } },
+      }).catch(() => {});
+      return NextResponse.json(cachedProduct);
+    }
 
     const product = await prisma.product.findUnique({
       where: { id },
@@ -64,7 +97,7 @@ export async function GET(
       data: { viewCount: { increment: 1 } },
     }).catch(() => {});
 
-    return NextResponse.json({
+    const responseData = {
       product: {
         id: product.id,
         title: product.title,
@@ -101,7 +134,11 @@ export async function GET(
         createdAt: product.createdAt,
         expiresAt: product.expiresAt,
       },
-    });
+    };
+
+    await CacheService.set(cacheKey, responseData, PRODUCT_DETAIL_CACHE_TTL);
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('Product GET error:', error);
     return NextResponse.json(
@@ -124,6 +161,57 @@ const updateProductSchema = z.object({
   regionId: z.number().optional(),
 });
 
+/**
+ * @openapi
+ * /api/products/{id}:
+ *   put:
+ *     summary: Update product (owner only)
+ *     tags: [Products]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               titleAr:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               descriptionAr:
+ *                 type: string
+ *               price:
+ *                 type: number
+ *               isNegotiable:
+ *                 type: boolean
+ *               condition:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *               regionId:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Product updated successfully
+ *       400:
+ *         description: Validation failed
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: You can only edit your own products
+ *       404:
+ *         description: Product not found
+ */
 // PUT: Update product
 export async function PUT(
   request: NextRequest,
@@ -168,30 +256,14 @@ export async function PUT(
       },
     });
 
-    // Reindex in Qdrant async (don't block response)
-    (async () => {
-      try {
-        const searchText = `${updatedProduct.title} ${updatedProduct.description || ''}`.trim();
-        const embedding = await getTextEmbedding(searchText);
-        const sparseVector = textToSparseVector(searchText);
-        await indexProduct(updatedProduct.id, embedding, sparseVector, {
-          product_id: updatedProduct.id,
-          seller_id: updatedProduct.sellerId,
-          title: updatedProduct.title,
-          title_ar: updatedProduct.titleAr || undefined,
-          description: updatedProduct.description || undefined,
-          price: Number(updatedProduct.price),
-          currency: updatedProduct.currency,
-          category_slug: updatedProduct.category?.slug || 'other',
-          country_code: updatedProduct.countryCode,
-          region_id: updatedProduct.regionId || undefined,
-          status: updatedProduct.status,
-          created_at: updatedProduct.createdAt.toISOString(),
-        });
-      } catch (err) {
-        console.error('Failed to reindex product in Qdrant:', err);
-      }
-    })();
+    // Reindex in Qdrant async via BullMQ (don't block response)
+    enqueueIndexProduct(updatedProduct.id).catch((err) => {
+      console.error('Failed to enqueue product indexing job:', err);
+    });
+
+    // Invalidate caches
+    await CacheService.del(`products:detail:${id}`);
+    await CacheService.invalidatePattern('products:list:*');
 
     return NextResponse.json({
       product: {
@@ -219,6 +291,30 @@ export async function PUT(
   }
 }
 
+/**
+ * @openapi
+ * /api/products/{id}:
+ *   delete:
+ *     summary: Delete product (owner only)
+ *     tags: [Products]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Product deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: You can only delete your own products
+ *       404:
+ *         description: Product not found
+ */
 // DELETE: Delete product
 export async function DELETE(
   request: NextRequest,
@@ -254,8 +350,8 @@ export async function DELETE(
 
     // Delete from Qdrant if indexed
     if (product.qdrantPointId) {
-      deleteProductFromIndex(product.qdrantPointId).catch((err) => {
-        console.error('Failed to delete from Qdrant:', err);
+      enqueueRemoveProduct(product.qdrantPointId).catch((err) => {
+        console.error('Failed to enqueue product delete job from Qdrant:', err);
       });
     }
 
@@ -263,6 +359,10 @@ export async function DELETE(
     await prisma.product.delete({
       where: { id },
     });
+
+    // Invalidate caches
+    await CacheService.del(`products:detail:${id}`);
+    await CacheService.invalidatePattern('products:list:*');
 
     return NextResponse.json({
       message: 'Product deleted successfully',

@@ -1,7 +1,7 @@
 import { preprocessSearchQuery } from "../src/lib/ai/query-preprocessor";
 import { rerankSearchResults } from "../src/lib/ai/reranker";
 import { searchProducts, textToSparseVector } from "../src/lib/qdrant/client";
-import { getTextEmbedding } from "../src/lib/ai/openai";
+import { getTextEmbedding } from '../src/lib/ai/ai-service';
 
 const TEST_QUERIES = [
   "family car",

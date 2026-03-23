@@ -146,6 +146,94 @@ async function main() {
     }
   }
 
+  // ============================================
+  // SEED ROLES & PERMISSIONS
+  // ============================================
+  console.log('🔐 Seeding roles & permissions...');
+
+  const permissions = [
+    { name: 'users:read', description: 'Read user information' },
+    { name: 'users:write', description: 'Create and update users' },
+    { name: 'users:delete', description: 'Delete users' },
+    { name: 'products:create', description: 'Create products' },
+    { name: 'products:edit', description: 'Edit own products' },
+    { name: 'products:delete', description: 'Delete own products' },
+    { name: 'products:moderate', description: 'Moderate all products' },
+    { name: 'categories:manage', description: 'Manage product categories' },
+    { name: 'analytics:view', description: 'View market analytics' },
+    { name: 'roles:manage', description: 'Manage roles and permissions' },
+  ];
+
+  const createdPermissions = [];
+  for (const perm of permissions) {
+    const p = await prisma.permission.upsert({
+      where: { name: perm.name },
+      update: { description: perm.description },
+      create: perm,
+    });
+    createdPermissions.push(p);
+  }
+
+  const roleDefinitions = [
+    {
+      name: 'super_admin',
+      description: 'Full access to everything',
+      permissions: permissions.map(p => p.name),
+    },
+    {
+      name: 'admin',
+      description: 'Administrative access for moderation and management',
+      permissions: [
+        'users:read',
+        'users:write',
+        'products:moderate',
+        'categories:manage',
+        'analytics:view',
+      ],
+    },
+    {
+      name: 'user',
+      description: 'Standard marketplace user',
+      permissions: [
+        'products:create',
+        'products:edit',
+        'products:delete',
+      ],
+    },
+  ];
+
+  for (const roleDef of roleDefinitions) {
+    const role = await prisma.role.upsert({
+      where: { name: roleDef.name },
+      update: { description: roleDef.description },
+      create: {
+        name: roleDef.name,
+        description: roleDef.description,
+      },
+    });
+
+    // Assign permissions
+    for (const permName of roleDef.permissions) {
+      const perm = createdPermissions.find(p => p.name === permName);
+      if (perm) {
+        await prisma.rolePermission.upsert({
+          where: {
+            roleId_permissionId: {
+              roleId: role.id,
+              permissionId: perm.id,
+            },
+          },
+          update: {},
+          create: {
+            roleId: role.id,
+            permissionId: perm.id,
+          },
+        });
+      }
+    }
+  }
+
+
   console.log('✅ Database seed completed!');
 }
 
