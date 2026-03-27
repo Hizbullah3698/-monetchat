@@ -889,6 +889,10 @@ export function ChatInterface({
           body: JSON.stringify({
             session_id: sessionId,
             message: text || undefined,
+            messages: messages
+              .filter((m) => m.text)
+              .map((m) => ({ role: m.role, content: m.text }))
+              .concat({ role: "user", content: text || "" }),
             image_url: imageUrl || undefined,
             location: { country_code: "KW", language: locale },
           }),
@@ -993,7 +997,16 @@ export function ChatInterface({
 
                   if (newSessionId && newSessionId !== sessionId) {
                     setSessionId(newSessionId);
-                    if (authUser && appModeCtx) {
+                    if (appModeCtx) {
+                      if (!authUser) {
+                        try {
+                           const stored = localStorage.getItem("Monetchat_chats");
+                           const chatsList = stored ? JSON.parse(stored) : [];
+                           const newTitle = text ? text.slice(0, 50) : "New Chat";
+                           chatsList.unshift({ id: newSessionId, title: newTitle, createdAt: Date.now() });
+                           localStorage.setItem("Monetchat_chats", JSON.stringify(chatsList));
+                        } catch(e) {}
+                      }
                       appModeCtx.refreshChats();
                       skipNextReload.current = true;
                       appModeCtx.selectChat(newSessionId);
