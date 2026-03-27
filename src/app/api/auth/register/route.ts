@@ -51,7 +51,24 @@ import { NotificationService } from '@/services/notification.service';
 import { logger } from '@/lib/logger';
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    let body: Record<string, unknown>;
+
+    // Safely parse the request body
+    try {
+      body = await req.json();
+    } catch (parseErr) {
+      // Fallback: try reading as text (in case the stream was consumed by Next.js)
+      try {
+        const raw = await req.text().catch(() => '');
+        if (!raw) {
+          return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
+        }
+        body = JSON.parse(raw);
+      } catch {
+        return NextResponse.json({ error: 'Invalid request body - please check your input' }, { status: 400 });
+      }
+    }
+
     const validatedData = registerSchema.parse(body);
 
     const existingUser = await prisma.user.findUnique({
@@ -66,19 +83,28 @@ export async function POST(req: Request) {
       );
     }
 
-    const hashedPassword = await hashPassword(validatedData.password);
+    let hashedPassword: string;
+    try {
+      hashedPassword = await hashPassword(validatedData.password);
+    } catch(hashErr: any) {
+      console.error('[register] hashPassword failed:', hashErr.message);
+      throw hashErr;
+    }
     const verificationToken = generateToken();
     const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    const userRole = await prisma.role.findUnique({
+    // Find or fallback-create the user role
+    let userRole = await prisma.role.findUnique({
       where: { name: 'user' },
     });
 
     if (!userRole) {
-      return NextResponse.json(
-        { error: 'User role not found' },
-        { status: 500 }
-      );
+      // Auto-create baseline roles if seeding was skipped
+      userRole = await prisma.role.upsert({
+        where: { name: 'user' },
+        update: {},
+        create: { name: 'user', description: 'Standard user role' },
+      });
     }
 
     const user = await prisma.user.create({
@@ -93,24 +119,31 @@ export async function POST(req: Request) {
       },
     });
 
-
     // In a real app, send email here
     logger.debug({ event: 'auth.register.token_generated', email: user.email }, `Verification token generated`);
 
-    // Enqueue welcome email notification
-    await NotificationService.enqueueEmail(
-      user.email,
-      'Welcome to Monetchat!',
-      `<h1>Welcome, ${user.name}!</h1><p>We are excited to have you on board.</p>`
-    );
+    // Enqueue welcome email notification (non-fatal if email not configured)
+    try {
+      await NotificationService.enqueueEmail(
+        user.email,
+        'Welcome to Monetchat!',
+        `<h1>Welcome, ${user.name}!</h1><p>We are excited to have you on board.</p>`
+      );
+    } catch (notifErr) {
+      logger.warn({ event: 'auth.register.email_failed', err: notifErr }, 'Welcome email could not be enqueued, continuing registration');
+    }
 
-    // Enqueue system notification for the welcome
-    await NotificationService.enqueueSystemNotification(
-      user.id,
-      'Welcome!',
-      'Thank you for registering on Monetchat. Complete your profile to get started.',
-      'SYSTEM'
-    );
+    // Enqueue system notification for the welcome (non-fatal)
+    try {
+      await NotificationService.enqueueSystemNotification(
+        user.id,
+        'Welcome!',
+        'Thank you for registering on Monetchat. Complete your profile to get started.',
+        'SYSTEM'
+      );
+    } catch (notifErr) {
+      logger.warn({ event: 'auth.register.notif_failed', err: notifErr }, 'System notification could not be enqueued, continuing registration');
+    }
 
     logger.info({ event: 'auth.register.success', userId: user.id, email: user.email }, 'User registered successfully');
 
@@ -123,6 +156,7 @@ export async function POST(req: Request) {
       logger.warn({ event: 'auth.register.failed', reason: 'Validation error', errors: error.errors }, 'Registration validation failed');
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
+    console.error('[register] CAUGHT ERROR:', (error as any)?.message ?? String(error), 'code:', (error as any)?.code);
     logger.error({ event: 'auth.register.error', err: error }, 'Registration error');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
