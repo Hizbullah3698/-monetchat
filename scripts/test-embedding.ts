@@ -1,12 +1,8 @@
-import OpenAI from "openai";
-
-const ollamaClient = new OpenAI({
-  baseURL: process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434/v1",
-  apiKey: "ollama", // Required by OpenAI SDK but ignored by Ollama
-});
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL!;
+const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || "";
 
 async function main() {
-  const model = "nomic-embed-text";
+  const model = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
   const samples = [
     "Hello world",
     "This is a longer sentence describing a beautiful car for sale.",
@@ -14,15 +10,30 @@ async function main() {
   ];
 
   console.log(`Testing embeddings with model: ${model}`);
+  console.log(`Endpoint: ${OLLAMA_BASE_URL}/api/embeddings`);
   console.log("-----------------------------------------");
 
   for (let i = 0; i < samples.length; i++) {
     try {
-      const response = await ollamaClient.embeddings.create({
-        model,
-        input: samples[i],
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": OLLAMA_API_KEY,
+        },
+        body: JSON.stringify({
+          model,
+          prompt: samples[i],
+        }),
       });
-      const embedding = response.data[0].embedding;
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`API error (${response.status}): ${errText}`);
+      }
+
+      const data = await response.json();
+      const embedding = data.embedding as number[];
       console.log(`Sample ${i + 1}:`);
       console.log(`Input: "${samples[i]}"`);
       console.log(`Dimension: ${embedding.length}`);

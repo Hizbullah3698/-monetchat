@@ -1,8 +1,12 @@
 node_modules
 .next
 .git
-.env
 npm-debug.log
 Dockerfile*
 docker-compose*
 README.md
+monetchat
+database
+pickpickdata
+.next
+node_modules

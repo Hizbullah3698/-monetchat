@@ -1,53 +1,83 @@
-import OpenAI from "openai";
-import { AiProvider } from "./ai-provider.interface";
+const baseUrl = process.env.OLLAMA_BASE_URL!;
+const apiKey = process.env.OLLAMA_API_KEY || "";
 
-export class OllamaProvider implements AiProvider {
-  private client: OpenAI;
-
-  constructor() {
-    this.client = new OpenAI({
-      baseURL: process.env.OLLAMA_BASE_URL ? `${process.env.OLLAMA_BASE_URL}/v1` : "http://127.0.0.1:11434/v1",
-      apiKey: "ollama", // Required by OpenAI SDK but ignored by Ollama
-      timeout: 120000,
+export class OllamaProvider {
+  async createChatCompletion({ messages }: { messages: any[] }) {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_CHAT_MODEL,
+        messages,
+        stream: false,
+      }),
     });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Ollama chat failed: ${res.status} ${text}`);
+    }
+
+    const data = await res.json();
+
+    return {
+      choices: [
+        {
+          message: {
+            content: data.message?.content || "",
+          },
+        },
+      ],
+    };
   }
 
-  async createChatCompletion(
-    options: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, "stream">
-  ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
-    return this.client.chat.completions.create({
-      ...options,
-      stream: false,
+  async createChatCompletionStream({ messages }: { messages: any[] }) {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_CHAT_MODEL,
+        messages,
+        stream: true,
+      }),
     });
+
+    return res.body;
   }
 
-  async createChatCompletionStream(
-    options: Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming, "stream">
-  ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
-    const stream = await this.client.chat.completions.create({
-      ...options,
-      stream: true,
+  async createEmbedding(input: string, model?: string) {
+    const res = await fetch(`${baseUrl}/api/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        model: model || process.env.OLLAMA_EMBED_MODEL,
+        prompt: input,
+      }),
     });
-    return stream;
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Embedding failed: ${res.status} ${text}`);
+    }
+
+    const data = await res.json();
+    return data.embedding;
   }
 
-  async createEmbedding(text: string, model?: string): Promise<number[]> {
-    const response = await this.client.embeddings.create({
-      model: model || this.getDefaultEmbeddingModel(),
-      input: text,
-    });
-    return response.data[0].embedding;
+  getDefaultChatModel() {
+    return process.env.OLLAMA_CHAT_MODEL!;
   }
 
-  getDefaultChatModel(): string {
-    return process.env.OLLAMA_CHAT_MODEL || "llama3.1:8b";
-  }
-
-  getDefaultVisionModel(): string {
-    return process.env.OLLAMA_VISION_MODEL || "llava";
-  }
-
-  getDefaultEmbeddingModel(): string {
-    return process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
+  getDefaultEmbeddingModel() {
+    return process.env.OLLAMA_EMBED_MODEL!;
   }
 }

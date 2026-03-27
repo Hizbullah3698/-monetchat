@@ -24,8 +24,19 @@ export const logger = pino({
         paths: redactPaths,
         censor: '[REDACTED]',
     },
-    // pino-pretty transport breaks Next.js Turbopack worker threads
-    // Output standard JSON instead in development
+    // Use pino-pretty in development for readable console output
+    ...(isProduction
+        ? {}
+        : {
+              transport: {
+                  target: 'pino-pretty',
+                  options: {
+                      colorize: true,
+                      translateTime: 'SYS:standard',
+                      ignore: 'pid,hostname',
+                  },
+              },
+          }),
 });
 
 // Provide a default export as well for convenience

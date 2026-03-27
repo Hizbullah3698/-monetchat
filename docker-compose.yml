@@ -6,13 +6,18 @@ services:
     container_name: Monetchat_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: Monetchat
-      POSTGRES_USER: Monetchatuser
-      POSTGRES_PASSWORD: Monetchatpassword
+      POSTGRES_DB: ${POSTGRES_DB:-Monetchat}
+      POSTGRES_USER: ${POSTGRES_USER:-Monetchatuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Monetchatpassword}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-Monetchatuser} -d ${POSTGRES_DB:-Monetchat}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -40,19 +45,29 @@ services:
     container_name: Monetchat_app
     restart: unless-stopped
     depends_on:
-      - postgres
-      - qdrant
-      - redis
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_started
     ports:
       - "3000:3000"
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://Monetchatuser:Monetchatpassword@postgres:5432/Monetchat
+      DATABASE_URL: postgresql://${POSTGRES_USER:-Monetchatuser}:${POSTGRES_PASSWORD:-Monetchatpassword}@postgres:5432/${POSTGRES_DB:-Monetchat}
       QDRANT_URL: http://qdrant:6333
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: "6379"
+      AI_BASE_URL: ${AI_BASE_URL}
+      AI_API_KEY: ${AI_API_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL}
 
   worker:
     build:
@@ -61,19 +76,30 @@ services:
     container_name: Monetchat_worker
     restart: unless-stopped
     depends_on:
-      - postgres
-      - qdrant
-      - redis
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_started
     ports:
       - "4501:4501"
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://Monetchatuser:Monetchatpassword@postgres:5432/Monetchat
+      DATABASE_URL: postgresql://${POSTGRES_USER:-Monetchatuser}:${POSTGRES_PASSWORD:-Monetchatpassword}@postgres:5432/${POSTGRES_DB:-Monetchat}
       QDRANT_URL: http://qdrant:6333
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: "6379"
+      AI_BASE_URL: ${AI_BASE_URL}
+      AI_API_KEY: ${AI_API_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL}
+
 
 volumes:
   postgres_data:

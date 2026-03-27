@@ -32,7 +32,12 @@ export async function register() {
             } as any;
         }
 
-        // Start notification worker
+        console.log(`[Instrumentation] NEXT_PHASE: ${process.env.NEXT_PHASE}, IS_NEXT_BUILD: ${process.env.IS_NEXT_BUILD}`);
+        // Skip worker registration during build phase to avoid Redis connection errors
+        if (process.env.NEXT_PHASE === 'phase-production-build' || process.env.IS_NEXT_BUILD === 'true') {
+            console.log('[Instrumentation] Skipping worker registration (BUILD DETECTED)');
+            return;
+        }
         try {
             const { workerService } = await import('@/services/worker.service');
             workerService.start(10000); // Poll every 10 seconds

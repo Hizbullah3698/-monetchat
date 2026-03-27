@@ -3,7 +3,6 @@
 
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { PrismaClient } from '@prisma/client';
-import OpenAI from 'openai';
 
 const COLLECTION = 'products';
 const VECTOR_SIZE = 192; // Dimension for nomic-embed-text (as observed from current Ollama instance)
@@ -16,10 +15,8 @@ const qdrant = new QdrantClient({
 
 const prisma = new PrismaClient();
 
-const ollamaClient = new OpenAI({
-  baseURL: process.env.OLLAMA_BASE_URL ? `${process.env.OLLAMA_BASE_URL}/v1` : "http://127.0.0.1:11434/v1",
-  apiKey: "ollama",
-});
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL!;
+const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || "";
 
 // --- BM25 Tokenizer (same as client.ts) ---
 
@@ -59,11 +56,23 @@ function textToSparseVector(text: string) {
 async function getEmbedding(text: string, retries = 3): Promise<number[]> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const response = await ollamaClient.embeddings.create({
-        model: process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text",
-        input: text,
+      const res = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": OLLAMA_API_KEY,
+        },
+        body: JSON.stringify({
+          model: process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text",
+          prompt: text,
+        }),
       });
-      return response.data[0].embedding;
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Embedding API error (${res.status}): ${errText}`);
+      }
+      const data = await res.json();
+      return data.embedding;
     } catch (err: unknown) {
       const error = err as { status?: number };
       console.warn(`Embedding failed attempt ${attempt}:`, error?.status || err);
@@ -162,14 +171,25 @@ Title: ${product.title}
 Desc: ${product.description || 'N/A'}
 Keywords:`;
 
-          const metaResponse = await ollamaClient.chat.completions.create({
-            model: process.env.OLLAMA_CHAT_MODEL || 'llama3.1:8b',
-            messages: [{ role: 'system', content: metaPrompt }],
-            temperature: 0.1,
-            max_tokens: 100,
+          const chatRes = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": OLLAMA_API_KEY,
+            },
+            body: JSON.stringify({
+              model: process.env.OLLAMA_CHAT_MODEL || 'qwen2.5:14b-instruct-q8_0',
+              messages: [{ role: 'user', content: metaPrompt }],
+              stream: false,
+              options: { temperature: 0.1 },
+            }),
           });
-
-          const keywords = metaResponse.choices[0].message.content || '';
+          if (!chatRes.ok) {
+            const errText = await chatRes.text();
+            throw new Error(`Chat API error (${chatRes.status}): ${errText}`);
+          }
+          const metaData = await chatRes.json();
+          const keywords = metaData.message?.content || '';
           const meta = { brand: '', model: '', year: null, features: [], semantic_summary: keywords };
 
           // --- UNIFIED SEARCHABLE TEXT ---
