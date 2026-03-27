@@ -10,6 +10,7 @@ export class OpenAiProvider implements AiProvider {
     }
     
     this.client = new OpenAI({
+      baseURL: process.env.OPENAI_BASE_URL || undefined,
       apiKey: process.env.OPENAI_API_KEY || "missing-key",
       timeout: 60000,
     });
