@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth/jwt';
 import { EventLogger } from '@/lib/services/event-logger.service';
+import { createApiHandler } from '@/lib/api/handler';
+import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 import {
   callOllamaFilters,
   parseFiltersFromText,
@@ -16,9 +19,7 @@ const requestSchema = z.object({
   limit: z.coerce.number().int().positive().max(50).default(10),
 });
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
+export const POST = createApiHandler(async (req: NextRequest, { body }) => {
     const { query, country, language, page, limit } = requestSchema.parse(body);
     const user = await getCurrentUser(req).catch(() => null);
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
         userId: user?.userId,
         queryText: query,
         queryType: 'text',
-        filters: criteria,
+        filters: criteria as unknown as Prisma.InputJsonValue,
         resultCount: response.meta.pagination.total,
         countryCode: country,
       },
@@ -48,13 +49,12 @@ export async function POST(req: NextRequest) {
 
     EventLogger.log('chat_search', { userId: user?.userId, metadata: { query, filters: criteria, total: response.meta.pagination.total } }).catch(() => {});
 
-    return NextResponse.json(response);
-  } catch (error) {
-    EventLogger.log('ai_error', { metadata: { route: '/api/ai/search', error: String(error) } }).catch(() => {});
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid request', details: error.errors }, { status: 400 });
-    }
-    console.error('AI search error:', error);
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
-  }
-}
+    return response;
+}, {
+  bodySchema: requestSchema,
+  rateLimit: {
+    name: 'ai-marketplace-search',
+    points: 20,
+    duration: 60,
+  },
+});

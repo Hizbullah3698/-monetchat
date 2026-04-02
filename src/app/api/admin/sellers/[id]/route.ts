@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { AuditLogService } from '@/lib/services/audit-service';
 import { EventLogger } from '@/lib/services/event-logger.service';
 import { NotificationService } from '@/services/notification.service';
+import { NotFoundError } from '@/lib/api/errors/AppError';
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -12,6 +13,14 @@ const paramsSchema = z.object({
 const updateSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'suspended']),
   reason: z.string().max(500).optional(),
+}).superRefine(({ status, reason }, ctx) => {
+  if ((status === 'rejected' || status === 'suspended') && !reason?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reason'],
+      message: 'Reason is required when rejecting or suspending a seller',
+    });
+  }
 });
 
 export const GET = createApiHandler(async (_req, { params }) => {
@@ -34,9 +43,7 @@ export const GET = createApiHandler(async (_req, { params }) => {
     },
   });
 
-  if (!seller) {
-    return Response.json({ error: 'Seller not found' }, { status: 404 });
-  }
+  if (!seller || seller.deletedAt) throw new NotFoundError('Seller not found');
 
   return { seller };
 }, { roles: ['admin'] });
@@ -46,16 +53,14 @@ export const PATCH = createApiHandler(async (req, { params, body, user }) => {
   const { status, reason } = updateSchema.parse(body);
 
   const seller = await prisma.seller.findUnique({ where: { userId: id } });
-  if (!seller) {
-    return Response.json({ error: 'Seller not found' }, { status: 404 });
-  }
+  if (!seller || seller.deletedAt) throw new NotFoundError('Seller not found');
 
   const updated = await prisma.seller.update({
     where: { userId: id },
     data: {
       status,
       statusReason: reason,
-      isVerified: status === 'approved' ? true : seller.isVerified,
+      isVerified: status === 'approved',
     },
   });
 
@@ -64,15 +69,21 @@ export const PATCH = createApiHandler(async (req, { params, body, user }) => {
     action: 'UPDATE',
     entityName: 'Seller',
     entityId: id,
-    changes: { status, reason },
+    changes: {
+      previousStatus: seller.status,
+      nextStatus: status,
+      reason,
+    },
     ipAddress: req.headers.get('x-forwarded-for') || undefined,
     userAgent: req.headers.get('user-agent') || undefined,
   }).catch(() => {});
 
-  EventLogger.log(
-    'seller_onboarded',
-    { userId: id, entityType: 'seller', entityId: id, metadata: { status, reason } }
-  ).catch(() => {});
+  if (status === 'approved') {
+    EventLogger.log(
+      'seller_onboarded',
+      { userId: id, entityType: 'seller', entityId: id, metadata: { status, reason } }
+    ).catch(() => {});
+  }
 
   NotificationService.createSystemAndAudit(
     id,

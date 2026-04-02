@@ -37,8 +37,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { requireAuth } from '@/lib/auth/jwt';
-import { getTextEmbedding, analyzeImageForListing, moderateContent } from '@/lib/ai/ai-service';
+import { analyzeImageForListing, moderateContent } from '@/lib/ai/ai-service';
 import { enqueueIndexProduct } from '@/jobs/indexing.job';
 import { createApiHandler } from '@/lib/api/handler';
 import { paginationSchema, getPaginationParams, formatPaginatedResponse } from '@/lib/api/pagination';
@@ -46,6 +45,8 @@ import { ValidationError, ForbiddenError } from '@/lib/api/errors/AppError';
 import { CacheService } from '@/lib/cache';
 import { ROLE_SELLER, ROLE_ADMIN, ROLE_SUPER_ADMIN } from '@/lib/auth/roles';
 import { EventLogger } from '@/lib/services/event-logger.service';
+import { AuditLogService } from '@/lib/services/audit-service';
+import { buildPublicProductWhere } from '@/lib/marketplace/visibility';
 
 const PRODUCTS_LIST_CACHE_TTL = 300; // 5 minutes
 
@@ -91,10 +92,9 @@ export const GET = createApiHandler(async (req, { query }) => {
   }
 
   // Build where clause
-  const where: any = {
-    status,
+  const where: any = buildPublicProductWhere({
     countryCode,
-  };
+  });
 
   if (categorySlug) {
     where.category = { slug: categorySlug };
@@ -312,19 +312,27 @@ export const POST = createApiHandler(async (req, { body, user }) => {
 
     if (aiAnalysis.category) {
       const category = await prisma.category.findUnique({
-        where: { slug: aiAnalysis.category },
-      });
+      where: { slug: aiAnalysis.category, deletedAt: null, isActive: true },
+    });
       if (category) categoryId = category.id;
     }
   } else if (validatedData.categorySlug) {
     const category = await prisma.category.findUnique({
-      where: { slug: validatedData.categorySlug },
+      where: { slug: validatedData.categorySlug, deletedAt: null, isActive: true },
     });
     if (category) categoryId = category.id;
   }
 
   if (!categoryId) {
     throw new ValidationError('Category not found or not provided');
+  }
+
+  if (
+    seller &&
+    [ 'rejected', 'suspended' ].includes(seller.status) &&
+    ![ROLE_ADMIN, ROLE_SUPER_ADMIN].includes(user!.role)
+  ) {
+    throw new ForbiddenError('Seller account is not allowed to create listings');
   }
 
   // Create product with images in transaction
@@ -364,6 +372,19 @@ export const POST = createApiHandler(async (req, { body, user }) => {
 
   EventLogger.log('product_created', { userId: user!.userId, entityType: 'product', entityId: product.id }).catch(() => {});
 
+  await AuditLogService.logAction({
+    userId: user!.userId,
+    action: 'CREATE',
+    entityName: 'Product',
+    entityId: product.id,
+    changes: {
+      status: product.status,
+      categoryId,
+    },
+    ipAddress: req.headers.get('x-forwarded-for') || undefined,
+    userAgent: req.headers.get('user-agent') || undefined,
+  }).catch(() => {});
+
   // Generate embedding and index in Qdrant via Background Job
   enqueueIndexProduct(product.id).catch((err) => {
     console.error('Failed to enqueue product indexing job:', err);
@@ -393,5 +414,10 @@ export const POST = createApiHandler(async (req, { body, user }) => {
   bodySchema: createProductSchema,
   requireAuth: true,
   roles: [ROLE_SELLER, ROLE_ADMIN, ROLE_SUPER_ADMIN],
+  rateLimit: {
+    name: 'product-create',
+    points: 10,
+    duration: 60 * 60,
+  },
 });
 

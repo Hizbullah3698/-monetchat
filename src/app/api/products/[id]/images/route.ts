@@ -1,11 +1,16 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { getCurrentUser } from '@/lib/auth/jwt';
+import { createApiHandler } from '@/lib/api/handler';
+import { NotFoundError, ForbiddenError, ValidationError } from '@/lib/api/errors/AppError';
 import { getKeyFromUrl, moveFile } from '@/lib/s3/client';
+import { AuditLogService } from '@/lib/services/audit-service';
+import { CacheService } from '@/lib/cache';
 
 const MAX_IMAGES_PER_PRODUCT = 10;
 const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+const paramsSchema = z.object({
+  id: z.string().uuid(),
+});
 
 const imageSchema = z.object({
   url: z.string().url(),
@@ -18,39 +23,26 @@ const requestSchema = z.object({
   images: z.array(imageSchema).min(1).max(5),
 });
 
-export async function POST(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser(req);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id: productId } = await ctx.params;
-    const body = await req.json();
+export const POST = createApiHandler(async (req, { params, body, user }) => {
+    const { id: productId } = paramsSchema.parse(params ?? {});
     const { images } = requestSchema.parse(body);
 
     // Check product ownership
     const product = await prisma.product.findUnique({
       where: { id: productId },
-      select: { sellerId: true },
+      select: { sellerId: true, deletedAt: true },
     });
-    if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    if (!product || product.deletedAt) {
+      throw new NotFoundError('Product not found');
     }
-    if (product.sellerId !== user.userId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (product.sellerId !== user!.userId) {
+      throw new ForbiddenError('Forbidden');
     }
 
     // Enforce max images
     const existingCount = await prisma.productImage.count({ where: { productId } });
     if (existingCount + images.length > MAX_IMAGES_PER_PRODUCT) {
-      return NextResponse.json(
-        { error: `Too many images. Max ${MAX_IMAGES_PER_PRODUCT} per product.` },
-        { status: 400 }
-      );
+      throw new ValidationError(`Too many images. Max ${MAX_IMAGES_PER_PRODUCT} per product.`);
     }
 
     // Process and move images to products folder if needed
@@ -68,7 +60,7 @@ export async function POST(
       const key = keyFromInput ?? '';
       const ext = key.split('.').pop()?.toLowerCase() || '';
       if (!ALLOWED_EXT.includes(ext)) {
-        return NextResponse.json({ error: 'Invalid image type' }, { status: 400 });
+        throw new ValidationError('Invalid image type');
       }
 
       let finalKey = key;
@@ -130,7 +122,23 @@ export async function POST(
       ],
     });
 
-    return NextResponse.json({
+    await CacheService.del(`products:detail:${productId}`);
+    await CacheService.invalidatePattern('products:list:*');
+
+    await AuditLogService.logAction({
+      userId: user!.userId,
+      action: 'UPDATE',
+      entityName: 'Product',
+      entityId: productId,
+      changes: {
+        imageCountAdded: records.length,
+        setPrimary: hasPrimary,
+      },
+      ipAddress: req.headers.get('x-forwarded-for') || undefined,
+      userAgent: req.headers.get('user-agent') || undefined,
+    }).catch(() => {});
+
+    return {
       message: 'Images added',
       images: updatedImages.map((img) => ({
         id: img.id,
@@ -138,12 +146,13 @@ export async function POST(
         isPrimary: img.isPrimary,
         sortOrder: img.sortOrder,
       })),
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input', details: error.errors }, { status: 400 });
-    }
-    console.error('Add product images error:', error);
-    return NextResponse.json({ error: 'Failed to add images' }, { status: 500 });
-  }
-}
+    };
+}, {
+  requireAuth: true,
+  bodySchema: requestSchema,
+  rateLimit: {
+    name: 'product-image-upload',
+    points: 20,
+    duration: 60 * 15,
+  },
+});

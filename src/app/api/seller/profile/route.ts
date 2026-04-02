@@ -1,9 +1,10 @@
 // Seller Profile API - Prisma-based
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { getCurrentUser } from '@/lib/auth/jwt';
+import { createApiHandler } from '@/lib/api/handler';
+import { ValidationError } from '@/lib/api/errors/AppError';
 import { ROLE_SELLER } from '@/lib/auth/roles';
+import { AuditLogService } from '@/lib/services/audit-service';
 
 const updateSellerSchema = z.object({
   businessName: z.string().trim().max(100).optional(),
@@ -14,15 +15,9 @@ const updateSellerSchema = z.object({
   nationalId: z.string().trim().max(20).optional(),
 });
 
-export async function GET() {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const GET = createApiHandler(async (_req, { user }) => {
     const seller = await prisma.seller.findUnique({
-      where: { userId: user.userId },
+      where: { userId: user!.userId },
       include: {
         user: {
           select: {
@@ -40,10 +35,10 @@ export async function GET() {
     });
 
     if (!seller) {
-      return NextResponse.json({ profile: null });
+      return { profile: null };
     }
 
-    return NextResponse.json({
+    return {
       profile: {
         userId: seller.userId,
         businessName: seller.businessName,
@@ -59,26 +54,15 @@ export async function GET() {
         status: seller.status,
         user: seller.user,
       },
-    });
-  } catch (error) {
-    console.error('Seller Profile API Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    };
+}, { requireAuth: true });
 
-export async function PUT(request: Request) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
+export const PUT = createApiHandler(async (request, { body, user }) => {
     const { businessName, bio, bioAr, phonePublic, whatsappNumber, nationalId } = updateSellerSchema.parse(body);
 
     // Fetch user's name to check profile completeness
     const dbUser = await prisma.user.findUnique({
-      where: { id: user.userId },
+      where: { id: user!.userId },
       select: { name: true },
     });
 
@@ -88,7 +72,7 @@ export async function PUT(request: Request) {
     // Save nationalId to User model (separate update)
     if (nationalId !== undefined) {
       await prisma.user.update({
-        where: { id: user.userId },
+        where: { id: user!.userId },
         data: { nationalId },
       });
     }
@@ -96,16 +80,16 @@ export async function PUT(request: Request) {
     // Ensure seller role exists and attach user to it
     const sellerRole = await prisma.role.findUnique({ where: { name: ROLE_SELLER } });
     if (!sellerRole) {
-      return NextResponse.json({ error: 'Seller role is not configured' }, { status: 500 });
+      throw new ValidationError('Seller role is not configured');
     }
 
     await prisma.user.update({
-      where: { id: user.userId },
+      where: { id: user!.userId },
       data: { roleId: sellerRole.id },
     });
 
     const seller = await prisma.seller.upsert({
-      where: { userId: user.userId },
+      where: { userId: user!.userId },
       update: {
         businessName,
         bio,
@@ -116,7 +100,7 @@ export async function PUT(request: Request) {
         // status and verification are admin-controlled; keep existing values
       },
       create: {
-        userId: user.userId,
+        userId: user!.userId,
         businessName,
         bio,
         bioAr,
@@ -128,19 +112,30 @@ export async function PUT(request: Request) {
       },
     });
 
-    return NextResponse.json({
+    await AuditLogService.logAction({
+      userId: user!.userId,
+      action: 'UPDATE',
+      entityName: 'Seller',
+      entityId: user!.userId,
+      changes: {
+        businessName,
+        bio,
+        bioAr,
+        phonePublic,
+        whatsappNumber,
+        isProfileComplete,
+        nationalIdUpdated: nationalId !== undefined,
+      },
+      ipAddress: request.headers.get('x-forwarded-for') || undefined,
+      userAgent: request.headers.get('user-agent') || undefined,
+    }).catch(() => {});
+
+    return {
       message: 'Profile updated',
       profile: {
         ...seller,
         status: seller.status,
         isProfileComplete,
       },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: error.errors }, { status: 400 });
-    }
-    console.error('Seller Profile API Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    };
+}, { requireAuth: true, bodySchema: updateSellerSchema });

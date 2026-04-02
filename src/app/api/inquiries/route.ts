@@ -12,7 +12,7 @@ export const POST = createApiHandler(async (_req, { body, user }) => {
 
   const product = await prisma.product.findFirst({
     where: { id: productId, status: 'active', deletedAt: null },
-    select: { id: true, sellerId: true },
+    select: { id: true, sellerId: true, title: true },
   });
   if (!product) {
     throw new ValidationError('Product is not available for inquiries');

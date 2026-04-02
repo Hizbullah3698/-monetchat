@@ -2,6 +2,7 @@ import { createApiHandler } from '@/lib/api/handler';
 import { prisma } from '@/lib/db/prisma';
 import { paginationSchema, getPaginationParams, formatPaginatedResponse } from '@/lib/api/pagination';
 import { z } from 'zod';
+import { buildPublicProductWhere } from '@/lib/marketplace/visibility';
 
 const listQuerySchema = paginationSchema.extend({
   country: z.string().optional(),
@@ -13,7 +14,7 @@ export const GET = createApiHandler(async (_req, { query, user }) => {
 
   const where = {
     userId: user!.userId,
-    product: { status: 'active', deletedAt: null },
+    product: buildPublicProductWhere(),
   };
 
   const [favorites, total] = await Promise.all([

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma';
 import { AuditAction } from '@prisma/client';
+import { logger } from '@/lib/logger';
 
 export interface AuditLogOptions {
   userId?: string | null;
@@ -14,7 +15,7 @@ export interface AuditLogOptions {
 export class AuditLogService {
   /**
    * Logs an action to the audit_logs table.
-   * Fails silently (only logs to console) to prevent disrupting the main application flow.
+   * Fails silently to prevent disrupting the main application flow.
    */
   static async logAction(options: AuditLogOptions) {
     try {
@@ -30,7 +31,15 @@ export class AuditLogService {
         },
       });
     } catch (error) {
-      console.error('[AuditLogService] Failed to create audit log:', error);
+      logger.warn(
+        {
+          entityName: options.entityName,
+          entityId: options.entityId,
+          action: options.action,
+          err: error,
+        },
+        '[AuditLogService] Failed to create audit log'
+      );
     }
   }
 }

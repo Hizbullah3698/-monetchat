@@ -2,9 +2,15 @@ import { createApiHandler } from '@/lib/api/handler';
 import { prisma } from '@/lib/db/prisma';
 import { paginationSchema, getPaginationParams, formatPaginatedResponse } from '@/lib/api/pagination';
 import { sellerUpdateInquirySchema } from '@/lib/validation/inquiry';
-import { ValidationError } from '@/lib/api/errors/AppError';
+import { NotFoundError } from '@/lib/api/errors/AppError';
 import { NotificationService } from '@/services/notification.service';
 import { EventLogger } from '@/lib/services/event-logger.service';
+import { AuditLogService } from '@/lib/services/audit-service';
+import { z } from 'zod';
+
+const updateInquirySchema = sellerUpdateInquirySchema.extend({
+  id: z.string().uuid(),
+});
 
 // GET /api/seller/inquiries - list inquiries for seller's products
 export const GET = createApiHandler(async (_req, { query, user }) => {
@@ -54,31 +60,27 @@ export const GET = createApiHandler(async (_req, { query, user }) => {
 
 // PATCH /api/seller/inquiries/:id - update status
 export const PATCH = createApiHandler(async (req, { params, body, user }) => {
-  const { id } = params;
-  const data = body;
+  const { id, status } = updateInquirySchema.parse(body);
 
   const inquiry = await prisma.inquiry.findUnique({
     where: { id },
-    select: { sellerId: true, status: true },
+    select: { sellerId: true, buyerId: true, status: true },
   });
   if (!inquiry || inquiry.sellerId !== user!.userId) {
-    return Response.json({ error: 'Not found' }, { status: 404 });
+    throw new NotFoundError('Not found');
   }
-
-  // simple transitions: allow any to responded/closed
-  const parsed = sellerUpdateInquirySchema.parse(data);
 
   const updated = await prisma.inquiry.update({
     where: { id },
-    data: { status: parsed.status },
+    data: { status },
   });
 
   NotificationService.createSystemAndAudit(
-    inquiry.buyerId!,
+    inquiry.buyerId,
     'Inquiry update',
-    `Seller updated your inquiry to "${parsed.status}"`,
+    `Seller updated your inquiry to "${status}"`,
     'INFO',
-    { inquiryId: id, status: parsed.status },
+    { inquiryId: id, status },
     user?.userId,
   ).catch(() => {});
 
@@ -86,8 +88,18 @@ export const PATCH = createApiHandler(async (req, { params, body, user }) => {
     userId: user?.userId,
     entityType: 'inquiry',
     entityId: id,
-    metadata: { status: parsed.status },
+    metadata: { status, action: 'updated' },
+  }).catch(() => {});
+
+  await AuditLogService.logAction({
+    userId: user!.userId,
+    action: 'UPDATE',
+    entityName: 'Inquiry',
+    entityId: id,
+    changes: { previousStatus: inquiry.status, newStatus: status },
+    ipAddress: req.headers.get('x-forwarded-for') || undefined,
+    userAgent: req.headers.get('user-agent') || undefined,
   }).catch(() => {});
 
   return { message: 'Inquiry updated', status: updated.status };
-}, { requireAuth: true, bodySchema: sellerUpdateInquirySchema });
+}, { requireAuth: true, bodySchema: updateInquirySchema });

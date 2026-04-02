@@ -171,6 +171,14 @@ model User {
   notifications Notification[]
   attachments   Attachment[]
   favorites     Favorite[]
+  buyerInquiries Inquiry[]    @relation("InquiryBuyer")
+  sellerInquiries Inquiry[]   @relation("InquirySeller")
+  buyerOrders    Order[]      @relation("OrderBuyer")
+  sellerOrders   Order[]      @relation("OrderSeller")
+  reportedItems  Report[]     @relation("ReportReporter")
+  authoredReviews Review[]
+  sellerReviews   Review[]    @relation("ReviewSeller")
+  eventLogs       EventLog[]
 
   // Audit Relations
   creator       User?     @relation("UserAuditCreator", fields: [createdById], references: [id])
@@ -326,6 +334,9 @@ model Product {
   images      ProductImage[]
   contactLogs ContactLog[]
   favorites   Favorite[]
+  inquiries   Inquiry[]
+  orders      Order[]
+  reviews     Review[]
   creator     User?          @relation("ProductCreator", fields: [createdById], references: [id])
   updator     User?          @relation("ProductUpdator", fields: [updatedById], references: [id])
 

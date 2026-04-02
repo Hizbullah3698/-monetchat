@@ -3,10 +3,12 @@ import { prisma } from '@/lib/db/prisma';
 import { createReviewSchema, listReviewQuerySchema } from '@/lib/validation/review';
 import { ValidationError } from '@/lib/api/errors/AppError';
 import { getPaginationParams, formatPaginatedResponse } from '@/lib/api/pagination';
+import { AuditLogService } from '@/lib/services/audit-service';
+import { z } from 'zod';
 
 // POST /api/reviews - create a review
 export const POST = createApiHandler(async (_req, { body, user }) => {
-  const { targetType, targetId, rating, comment } = body;
+  const { targetType, targetId, rating, comment } = body as z.infer<typeof createReviewSchema>;
 
   let productId: string | null = null;
   let sellerId: string | null = null;
@@ -21,8 +23,8 @@ export const POST = createApiHandler(async (_req, { body, user }) => {
     sellerId = product.sellerId;
     if (sellerId === user!.userId) throw new ValidationError('Cannot review your own product');
   } else {
-    const seller = await prisma.seller.findUnique({
-      where: { userId: targetId },
+    const seller = await prisma.seller.findFirst({
+      where: { userId: targetId, deletedAt: null },
       select: { userId: true },
     });
     if (!seller) throw new ValidationError('Seller not found');
@@ -75,12 +77,28 @@ export const POST = createApiHandler(async (_req, { body, user }) => {
     return created;
   });
 
+  await AuditLogService.logAction({
+    userId: user!.userId,
+    action: 'CREATE',
+    entityName: 'Review',
+    entityId: review.id,
+    changes: { targetType, targetId, rating },
+  }).catch(() => {});
+
   return { message: 'Review submitted', reviewId: review.id };
-}, { requireAuth: true, bodySchema: createReviewSchema });
+}, {
+  requireAuth: true,
+  bodySchema: createReviewSchema,
+  rateLimit: {
+    name: 'review-create',
+    points: 10,
+    duration: 60 * 60,
+  },
+});
 
 // GET /api/reviews - list reviews for product or seller
 export const GET = createApiHandler(async (_req, { query }) => {
-  const { targetType, targetId, page, limit } = query;
+  const { targetType, targetId, page = 1, limit = 10 } = query as z.infer<typeof listReviewQuerySchema>;
   const { skip, take } = getPaginationParams({ page, limit, order: 'desc' });
 
   const where =

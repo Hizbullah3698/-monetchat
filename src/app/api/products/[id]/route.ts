@@ -1,17 +1,19 @@
-// Single Product API
-// GET /api/products/[id] - Get product details
-// PUT /api/products/[id] - Update product (owner only)
-// DELETE /api/products/[id] - Delete product (owner only)
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/jwt';
-import { ValidationError } from '@/lib/api/errors/AppError';
+import { createApiHandler } from '@/lib/api/handler';
+import { NotFoundError, ForbiddenError, ValidationError } from '@/lib/api/errors/AppError';
 import { enqueueIndexProduct, enqueueRemoveProduct } from '@/jobs/indexing.job';
 import { CacheService } from '@/lib/cache';
+import { ROLE_ADMIN, ROLE_SUPER_ADMIN } from '@/lib/auth/roles';
+import { buildPublicProductWhere } from '@/lib/marketplace/visibility';
+import { AuditLogService } from '@/lib/services/audit-service';
 
 const PRODUCT_DETAIL_CACHE_TTL = 3600; // 1 hour
+const paramsSchema = z.object({
+  id: z.string().uuid(),
+});
 
 /**
  * @openapi
@@ -33,27 +35,25 @@ const PRODUCT_DETAIL_CACHE_TTL = 3600; // 1 hour
  *       500:
  *         description: Failed to fetch product
  */
-// GET: Get product details
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await context.params;
+export const GET = createApiHandler(async (request, { params }) => {
+    const { id } = paramsSchema.parse(params ?? {});
+    const authUser = await getCurrentUser(request).catch(() => null);
+    const canViewHidden =
+      authUser?.role === ROLE_ADMIN || authUser?.role === ROLE_SUPER_ADMIN;
 
     const cacheKey = `products:detail:${id}`;
-    const cachedProduct = await CacheService.get(cacheKey);
+    const cachedProduct = !authUser ? await CacheService.get(cacheKey) : null;
     if (cachedProduct) {
       // Fire and forget view increment in background
       prisma.product.update({
         where: { id },
         data: { viewCount: { increment: 1 } },
       }).catch(() => {});
-      return NextResponse.json(cachedProduct);
+      return cachedProduct;
     }
 
-    const product = await prisma.product.findUnique({
-      where: { id },
+    const product = await prisma.product.findFirst({
+      where: canViewHidden ? { id, deletedAt: null } : buildPublicProductWhere({ id }),
       include: {
         images: {
           orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
@@ -85,11 +85,12 @@ export async function GET(
       },
     });
 
-    if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+    if (!product) throw new NotFoundError('Product not found');
+
+    const isOwner = authUser?.userId === product.sellerId;
+    const isPubliclyVisible = product.status === 'active' && !product.deletedAt;
+    if (!isPubliclyVisible && !isOwner && !canViewHidden) {
+      throw new NotFoundError('Product not found');
     }
 
     // Increment view count (fire and forget)
@@ -137,17 +138,12 @@ export async function GET(
       },
     };
 
-    await CacheService.set(cacheKey, responseData, PRODUCT_DETAIL_CACHE_TTL);
+    if (!authUser && isPubliclyVisible) {
+      await CacheService.set(cacheKey, responseData, PRODUCT_DETAIL_CACHE_TTL);
+    }
 
-    return NextResponse.json(responseData);
-  } catch (error) {
-    console.error('Product GET error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch product' },
-      { status: 500 }
-    );
-  }
-}
+    return responseData;
+});
 
 // Validation schema for updating product
 const updateProductSchema = z.object({
@@ -222,39 +218,22 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
  *       404:
  *         description: Product not found
  */
-// PUT: Update product
-export async function PUT(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id } = await context.params;
-    const body = await request.json();
+export const PUT = createApiHandler(async (request, { params, body, user }) => {
+    const { id } = paramsSchema.parse(params ?? {});
     const validatedData = updateProductSchema.parse(body);
 
     // Check if product exists and user owns it
     const product = await prisma.product.findUnique({
       where: { id },
-      select: { sellerId: true, status: true },
+      select: { sellerId: true, status: true, deletedAt: true },
     });
 
-    if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+    if (!product || product.deletedAt) {
+      throw new NotFoundError('Product not found');
     }
 
-    if (product.sellerId !== user.userId) {
-      return NextResponse.json(
-        { error: 'You can only edit your own products' },
-        { status: 403 }
-      );
+    if (product.sellerId !== user!.userId) {
+      throw new ForbiddenError('You can only edit your own products');
     }
 
     // Enforce allowed status transitions for sellers
@@ -283,7 +262,17 @@ export async function PUT(
     await CacheService.del(`products:detail:${id}`);
     await CacheService.invalidatePattern('products:list:*');
 
-    return NextResponse.json({
+    await AuditLogService.logAction({
+      userId: user!.userId,
+      action: 'UPDATE',
+      entityName: 'Product',
+      entityId: id,
+      changes: validatedData,
+      ipAddress: request.headers.get('x-forwarded-for') || undefined,
+      userAgent: request.headers.get('user-agent') || undefined,
+    }).catch(() => {});
+
+    return {
       product: {
         id: updatedProduct.id,
         title: updatedProduct.title,
@@ -291,23 +280,8 @@ export async function PUT(
         status: updatedProduct.status,
         updatedAt: updatedProduct.updatedAt,
       },
-    });
-  } catch (error) {
-    console.error('Product PUT error:', error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: 'Failed to update product' },
-      { status: 500 }
-    );
-  }
-}
+    };
+}, { requireAuth: true, bodySchema: updateProductSchema });
 
 /**
  * @openapi
@@ -333,37 +307,21 @@ export async function PUT(
  *       404:
  *         description: Product not found
  */
-// DELETE: Delete product
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id } = await context.params;
+export const DELETE = createApiHandler(async (request, { params, user }) => {
+    const { id } = paramsSchema.parse(params ?? {});
 
     // Check if product exists and user owns it
     const product = await prisma.product.findUnique({
       where: { id },
-      select: { sellerId: true, qdrantPointId: true, status: true },
+      select: { sellerId: true, qdrantPointId: true, status: true, deletedAt: true },
     });
 
-    if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+    if (!product || product.deletedAt) {
+      throw new NotFoundError('Product not found');
     }
 
-    if (product.sellerId !== user.userId) {
-      return NextResponse.json(
-        { error: 'You can only delete your own products' },
-        { status: 403 }
-      );
+    if (product.sellerId !== user!.userId) {
+      throw new ForbiddenError('You can only delete your own products');
     }
 
     // Soft delete / deactivate
@@ -384,14 +342,17 @@ export async function DELETE(
     await CacheService.del(`products:detail:${id}`);
     await CacheService.invalidatePattern('products:list:*');
 
-    return NextResponse.json({
+    await AuditLogService.logAction({
+      userId: user!.userId,
+      action: 'DELETE',
+      entityName: 'Product',
+      entityId: id,
+      changes: { previousStatus: product.status, newStatus: 'expired' },
+      ipAddress: request.headers.get('x-forwarded-for') || undefined,
+      userAgent: request.headers.get('user-agent') || undefined,
+    }).catch(() => {});
+
+    return {
       message: 'Product deactivated successfully',
-    });
-  } catch (error) {
-    console.error('Product DELETE error:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete product' },
-      { status: 500 }
-    );
-  }
-}
+    };
+}, { requireAuth: true });

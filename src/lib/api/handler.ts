@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { handleApiError, successResponse } from './response';
-import { ValidationError, AuthenticationError, ForbiddenError } from './errors/AppError';
+import { ValidationError, AuthenticationError, ForbiddenError, RateLimitError } from './errors/AppError';
 import { requireAuth } from '@/lib/auth/jwt';
 import { logger } from '@/lib/logger';
 import { ROLE_SUPER_ADMIN, RoleName } from '@/lib/auth/roles';
+import { checkRouteRateLimit, RouteRateLimitOptions } from '@/lib/rate-limiter';
 
 export type ApiHandler<T = any> = (
   req: NextRequest,
@@ -16,6 +17,18 @@ export interface HandlerOptions<TBody = any, TQuery = any> {
   querySchema?: z.ZodSchema<TQuery>;
   requireAuth?: boolean;
   roles?: string[];
+  rateLimit?: RouteRateLimitOptions & {
+    key?: (req: NextRequest, user?: any) => string | Promise<string>;
+  };
+}
+
+function getRequestIp(req: NextRequest) {
+  const forwardedFor = req.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0]?.trim() || 'unknown';
+  }
+
+  return req.headers.get('x-real-ip') || 'unknown';
 }
 
 /**
@@ -56,6 +69,20 @@ export function createApiHandler<TBody = any, TQuery = any, TResult = any>(
         } catch (e) {
           if (e instanceof ForbiddenError) throw e;
           throw new AuthenticationError();
+        }
+      }
+
+      if (options.rateLimit) {
+        const rateLimitKey = options.rateLimit.key
+          ? await options.rateLimit.key(req, user ?? undefined)
+          : `${options.rateLimit.name}:${user?.userId ?? getRequestIp(req)}`;
+        const rateLimitResult = await checkRouteRateLimit(rateLimitKey, options.rateLimit);
+
+        if (!rateLimitResult.allowed) {
+          throw new RateLimitError('Too many requests, please try again later.', {
+            retryAfter: rateLimitResult.retryAfter,
+            route: options.rateLimit.name,
+          });
         }
       }
 

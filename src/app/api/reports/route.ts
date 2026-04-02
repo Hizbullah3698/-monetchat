@@ -2,6 +2,7 @@ import { createApiHandler } from '@/lib/api/handler';
 import { prisma } from '@/lib/db/prisma';
 import { createReportSchema } from '@/lib/validation/report';
 import { ValidationError } from '@/lib/api/errors/AppError';
+import { AuditLogService } from '@/lib/services/audit-service';
 
 const RATE_LIMIT_WINDOW_MIN = 10;
 const RATE_LIMIT_MAX = 5;
@@ -60,5 +61,23 @@ export const POST = createApiHandler(async (req, { body, user }) => {
     },
   });
 
+  await AuditLogService.logAction({
+    userId: user!.userId,
+    action: 'CREATE',
+    entityName: 'Report',
+    entityId: report.id,
+    changes: { targetType, targetId, reason },
+    ipAddress: req.headers.get('x-forwarded-for') || undefined,
+    userAgent: req.headers.get('user-agent') || undefined,
+  }).catch(() => {});
+
   return { message: 'Report submitted', reportId: report.id };
-}, { requireAuth: true, bodySchema: createReportSchema });
+}, {
+  requireAuth: true,
+  bodySchema: createReportSchema,
+  rateLimit: {
+    name: 'report-create',
+    points: 5,
+    duration: 60 * 10,
+  },
+});

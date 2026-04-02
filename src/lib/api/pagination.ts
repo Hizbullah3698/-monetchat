@@ -21,8 +21,11 @@ export interface PaginatedResult<T> {
   };
 }
 
-export function getPaginationParams(query: PaginationQuery) {
-  const { page, limit } = query;
+type PaginationInput = Partial<PaginationQuery>;
+
+export function getPaginationParams(query: PaginationInput) {
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 10;
   const skip = (page - 1) * limit;
   return {
     skip,
@@ -33,9 +36,10 @@ export function getPaginationParams(query: PaginationQuery) {
 export function formatPaginatedResponse<T>(
   data: T[],
   total: number,
-  query: PaginationQuery
+  query: PaginationInput
 ): PaginatedResult<T> {
-  const { page, limit } = query;
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 10;
   return {
     data,
     meta: {

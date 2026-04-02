@@ -1,11 +1,11 @@
 // Seller Listings API - Prisma-based
-import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { getCurrentUser } from '@/lib/auth/jwt';
 import { z } from 'zod';
+import { createApiHandler } from '@/lib/api/handler';
+import { ProductStatus } from '@prisma/client';
 
 const querySchema = z.object({
-  status: z.string().optional(),
+  status: z.nativeEnum(ProductStatus).optional(),
   q: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
@@ -13,27 +13,24 @@ const querySchema = z.object({
   order: z.enum(['asc', 'desc']).default('desc'),
 });
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const parsed = querySchema.parse(Object.fromEntries(searchParams.entries()));
-    const { status, q, page, limit, sort, order } = parsed;
+export const GET = createApiHandler(async (_request, { query, user }) => {
+    const { status, q, sort, order } = query;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
 
     // Ensure seller exists
     const seller = await prisma.seller.findUnique({
-      where: { userId: user.userId },
+      where: { userId: user!.userId },
       select: { userId: true },
     });
     if (!seller) {
-      return NextResponse.json({ products: [], meta: { pagination: { page, limit, total: 0, totalPages: 0 } } });
+      return {
+        products: [],
+        meta: { pagination: { page, limit, total: 0, totalPages: 0 } },
+      };
     }
 
-    const where: any = { sellerId: user.userId };
+    const where: any = { sellerId: user!.userId, deletedAt: null };
     if (status) where.status = status;
     if (q) {
       where.OR = [
@@ -76,7 +73,7 @@ export async function GET(request: NextRequest) {
       updatedAt: p.updatedAt,
     }));
 
-    return NextResponse.json({
+    return {
       products: data,
       meta: {
         pagination: {
@@ -86,12 +83,5 @@ export async function GET(request: NextRequest) {
           totalPages: Math.ceil(total / limit),
         },
       },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid query', details: error.errors }, { status: 400 });
-    }
-    console.error('Seller Listings API Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    };
+}, { requireAuth: true, querySchema });

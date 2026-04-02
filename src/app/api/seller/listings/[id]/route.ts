@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { getCurrentUser } from '@/lib/auth/jwt';
 import { z } from 'zod';
-import { ValidationError } from '@/lib/api/errors/AppError';
+import { createApiHandler } from '@/lib/api/handler';
+import { NotFoundError, ValidationError } from '@/lib/api/errors/AppError';
+import { AuditLogService } from '@/lib/services/audit-service';
+import { enqueueIndexProduct } from '@/jobs/indexing.job';
+import { CacheService } from '@/lib/cache';
 
 const updateSchema = z.object({
   title: z.string().min(3).optional(),
@@ -22,16 +25,15 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   expired: ['expired', 'pending'],
   rejected: ['pending', 'draft'],
 };
+const paramsSchema = z.object({
+  id: z.string().uuid(),
+});
 
-export async function GET(
+export const GET = createApiHandler(async (
   _req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { id } = await ctx.params;
+  { params, user }
+) => {
+    const { id } = paramsSchema.parse(params ?? {});
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
@@ -40,35 +42,26 @@ export async function GET(
       },
     });
 
-    if (!product || product.sellerId !== user.userId) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!product || product.deletedAt || product.sellerId !== user!.userId) {
+      throw new NotFoundError('Not found');
     }
 
-    return NextResponse.json({ product });
-  } catch (error) {
-    console.error('Seller product GET error:', error);
-    return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
-  }
-}
+    return { product };
+}, { requireAuth: true });
 
-export async function PATCH(
+export const PATCH = createApiHandler(async (
   req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { id } = await ctx.params;
-    const body = await req.json();
+  { params, body, user }
+) => {
+    const { id } = paramsSchema.parse(params ?? {});
     const data = updateSchema.parse(body);
 
     const product = await prisma.product.findUnique({
       where: { id },
-      select: { sellerId: true, status: true },
+      select: { sellerId: true, status: true, deletedAt: true },
     });
-    if (!product || product.sellerId !== user.userId) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!product || product.deletedAt || product.sellerId !== user!.userId) {
+      throw new NotFoundError('Not found');
     }
 
     if (data.status) {
@@ -87,15 +80,19 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ product: updated });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: error.errors }, { status: 400 });
-    }
-    if (error instanceof ValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    console.error('Seller product PATCH error:', error);
-    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
-  }
-}
+    enqueueIndexProduct(updated.id).catch(() => {});
+    await CacheService.del(`products:detail:${id}`);
+    await CacheService.invalidatePattern('products:list:*');
+
+    await AuditLogService.logAction({
+      userId: user!.userId,
+      action: 'UPDATE',
+      entityName: 'Product',
+      entityId: id,
+      changes: data,
+      ipAddress: req.headers.get('x-forwarded-for') || undefined,
+      userAgent: req.headers.get('user-agent') || undefined,
+    }).catch(() => {});
+
+    return { product: updated };
+}, { requireAuth: true, bodySchema: updateSchema });
