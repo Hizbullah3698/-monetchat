@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limiter';
+import { ROLE_ADMIN, ROLE_SELLER, ROLE_SUPER_ADMIN } from '@/lib/auth/roles';
 
 // Add paths that require authentication
 const protectedPaths = [
@@ -13,8 +14,8 @@ const protectedPaths = [
 
 // Add paths that require specific roles
 const roleProtectedPaths: Record<string, string[]> = {
-  '/api/seller': ['user', 'admin', 'super_admin'],
-  '/api/admin': ['admin', 'super_admin'],
+  '/api/seller': [ROLE_SELLER, ROLE_ADMIN, ROLE_SUPER_ADMIN],
+  '/api/admin': [ROLE_ADMIN, ROLE_SUPER_ADMIN],
 };
 
 export async function middleware(req: NextRequest) {
@@ -93,8 +94,8 @@ export async function middleware(req: NextRequest) {
 
     // Role-based access control (RBAC)
     const userRole = payload.role as string;
-    const isSuperAdmin = userRole === 'super_admin';
-    
+    const isSuperAdmin = userRole === ROLE_SUPER_ADMIN;
+
     if (requiredRoles && !isSuperAdmin && !requiredRoles.includes(userRole)) {
       console.log(JSON.stringify({ level: 40, time: Date.now(), msg: 'Forbidden: Insufficient permissions', ip, pathname, userRole, requiredRoles }));
       return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });

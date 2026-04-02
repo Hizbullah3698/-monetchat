@@ -34,7 +34,7 @@ export const POST = createApiHandler(async (req, { body }) => {
 
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { role: { select: { name: true } } } as any,
+    include: { role: { select: { name: true } } },
   });
 
   if (!user || !(await comparePassword(password, user?.passwordHash || ''))) {
@@ -52,7 +52,7 @@ export const POST = createApiHandler(async (req, { body }) => {
     throw new ForbiddenError('Your account is currently disabled');
   }
 
-  const roleName = (user.role as any)?.name || 'buyer';
+  const roleName = user.role?.name || 'user';
   const accessToken = await signAccessToken({ 
     userId: user.id, 
     role: roleName, 

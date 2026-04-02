@@ -192,6 +192,26 @@ async function main() {
       ],
     },
     {
+      name: 'admin',
+      description: 'Administrative access for moderation and management',
+      permissions: [
+        'users:read',
+        'users:write',
+        'products:moderate',
+        'categories:manage',
+        'analytics:view',
+      ],
+    },
+    {
+      name: 'seller',
+      description: 'Seller account with listing capabilities',
+      permissions: [
+        'products:create',
+        'products:edit',
+        'products:delete',
+      ],
+    },
+    {
       name: 'user',
       description: 'Standard marketplace user',
       permissions: [

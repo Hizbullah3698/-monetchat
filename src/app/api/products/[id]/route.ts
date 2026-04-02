@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/jwt';
+import { ValidationError } from '@/lib/api/errors/AppError';
 import { enqueueIndexProduct, enqueueRemoveProduct } from '@/jobs/indexing.job';
 import { CacheService } from '@/lib/cache';
 
@@ -157,9 +158,18 @@ const updateProductSchema = z.object({
   price: z.number().positive().optional(),
   isNegotiable: z.boolean().optional(),
   condition: z.enum(['new', 'like_new', 'good', 'fair', 'poor']).optional(),
-  status: z.enum(['active', 'sold']).optional(),
+  status: z.enum(['draft', 'pending', 'active', 'sold', 'expired', 'rejected']).optional(),
   regionId: z.number().optional(),
 });
+
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  draft: ['pending', 'active', 'draft'],
+  pending: ['active', 'draft', 'rejected'],
+  active: ['sold', 'expired', 'pending', 'active'],
+  sold: ['sold'],
+  expired: ['expired', 'pending'],
+  rejected: ['pending', 'draft'],
+};
 
 /**
  * @openapi
@@ -230,7 +240,7 @@ export async function PUT(
     // Check if product exists and user owns it
     const product = await prisma.product.findUnique({
       where: { id },
-      select: { sellerId: true },
+      select: { sellerId: true, status: true },
     });
 
     if (!product) {
@@ -245,6 +255,14 @@ export async function PUT(
         { error: 'You can only edit your own products' },
         { status: 403 }
       );
+    }
+
+    // Enforce allowed status transitions for sellers
+    if (validatedData.status) {
+      const allowed = ALLOWED_TRANSITIONS[product.status] || [];
+      if (!allowed.includes(validatedData.status)) {
+        throw new ValidationError(`Invalid status transition from ${product.status} to ${validatedData.status}`);
+      }
     }
 
     // Update product
@@ -331,7 +349,7 @@ export async function DELETE(
     // Check if product exists and user owns it
     const product = await prisma.product.findUnique({
       where: { id },
-      select: { sellerId: true, qdrantPointId: true },
+      select: { sellerId: true, qdrantPointId: true, status: true },
     });
 
     if (!product) {
@@ -348,24 +366,26 @@ export async function DELETE(
       );
     }
 
+    // Soft delete / deactivate
+    await prisma.product.update({
+      where: { id },
+      data: {
+        status: 'expired',
+        deletedAt: new Date(),
+      },
+    });
+
     // Delete from Qdrant if indexed
     if (product.qdrantPointId) {
-      enqueueRemoveProduct(product.qdrantPointId).catch((err) => {
-        console.error('Failed to enqueue product delete job from Qdrant:', err);
-      });
+      enqueueRemoveProduct(product.qdrantPointId).catch(() => {});
     }
-
-    // Delete product (cascades to images)
-    await prisma.product.delete({
-      where: { id },
-    });
 
     // Invalidate caches
     await CacheService.del(`products:detail:${id}`);
     await CacheService.invalidatePattern('products:list:*');
 
     return NextResponse.json({
-      message: 'Product deleted successfully',
+      message: 'Product deactivated successfully',
     });
   } catch (error) {
     console.error('Product DELETE error:', error);

@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/jwt';
 import { uploadFile, getExtensionFromContentType } from '@/lib/s3/client';
+import { randomUUID } from 'crypto';
 
 // Allowed MIME types
 const ALLOWED_MIME_TYPES = [
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const ext = getExtensionFromContentType(file.type);
-    const fileName = `upload.${ext}`;
+    const fileName = `${randomUUID()}.${ext}`;
 
     const result = await uploadFile(targetFolder, fileName, buffer, file.type);
 

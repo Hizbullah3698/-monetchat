@@ -44,7 +44,7 @@ export async function POST() {
     // Verify token exists in database and is not revoked
     const storedToken = await prisma.refreshToken.findUnique({
       where: { token: refreshToken },
-      include: { user: true },
+      include: { user: { include: { role: { select: { name: true } } } } },
     });
 
     if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
@@ -52,7 +52,8 @@ export async function POST() {
     }
 
     const { user } = storedToken;
-    const newAccessToken = await signAccessToken({ userId: user.id, role: user.role, email: user.email });
+    const roleName = user.role?.name || 'user';
+    const newAccessToken = await signAccessToken({ userId: user.id, role: roleName, email: user.email });
     const newRefreshToken = await signRefreshToken({ userId: user.id });
 
     // Rotate refresh tokens

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import nodemailer from 'nodemailer';
 import { NotificationType } from '@prisma/client';
+import { AuditLogService } from '@/lib/services/audit-service';
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.example.com',
@@ -37,6 +38,31 @@ export class NotificationService {
         status: 'pending',
       },
     });
+  }
+
+  /**
+   * Convenience: log + create system notification immediately (no worker), mainly for critical flows.
+   */
+  static async createSystemAndAudit(userId: string, title: string, body: string, type: NotificationType = 'INFO', metadata?: any, actorId?: string) {
+    const notification = await prisma.notification.create({
+      data: {
+        userId,
+        title,
+        body,
+        type,
+        metadata: metadata || {},
+      },
+    });
+
+    await AuditLogService.logAction({
+      userId: actorId ?? userId,
+      action: 'UPDATE',
+      entityName: 'Notification',
+      entityId: notification.id,
+      changes: { title, body, type },
+    }).catch(() => {});
+
+    return notification;
   }
 
   /**

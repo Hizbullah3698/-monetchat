@@ -1,89 +1,65 @@
-/**
- * @openapi
- * /api/admin/products/{id}/status:
- *   patch:
- *     summary: Update product status (Admin)
- *     tags: [Admin, Products]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - status
- *             properties:
- *               status:
- *                 type: string
- *                 enum: [active, pending, sold, expired, rejected]
- *               rejectionReason:
- *                 type: string
- *     responses:
- *       200:
- *         description: Product status updated
- *       404:
- *         description: Product not found
- *       403:
- *         description: Forbidden
- */
-import { z } from 'zod';
-import { prisma } from '@/lib/db/prisma';
 import { createApiHandler } from '@/lib/api/handler';
-import { NotFoundError } from '@/lib/api/errors/AppError';
+import { prisma } from '@/lib/db/prisma';
+import { z } from 'zod';
 import { AuditLogService } from '@/lib/services/audit-service';
+import { EventLogger } from '@/lib/services/event-logger.service';
+import { NotificationService } from '@/services/notification.service';
 
-const updateStatusSchema = z.object({
-  status: z.enum(['active', 'pending', 'sold', 'expired', 'rejected']),
-  rejectionReason: z.string().optional(),
+const bodySchema = z.object({
+  status: z.enum(['active', 'rejected', 'pending']),
+  reason: z.string().max(500).optional(),
 });
 
-export const PATCH = createApiHandler(async (req, { body, params, user }) => {
+export const PATCH = createApiHandler(async (req, { params, body, user }) => {
   const { id } = params;
-  const { status, rejectionReason } = body as z.infer<typeof updateStatusSchema>;
+  const { status, reason } = body;
 
-  const product = await prisma.product.findUnique({
-    where: { id },
-  });
-
+  const product = await prisma.product.findUnique({ where: { id } });
   if (!product) {
-    throw new NotFoundError('Product not found');
+    return Response.json({ error: 'Product not found' }, { status: 404 });
   }
 
-  const updatedProduct = await prisma.product.update({
+  const updated = await prisma.product.update({
     where: { id },
     data: {
       status,
-      rejectionReason: status === 'rejected' ? rejectionReason : null,
-      updatedById: user.userId,
+      rejectionReason: status === 'rejected' ? reason || 'Not specified' : null,
     },
   });
 
-  // Create audit log entry for this action
   await AuditLogService.logAction({
-    userId: user.userId,
-    action: 'UPDATE',
+    userId: user?.userId,
+    action: status === 'active' ? 'UPDATE' : 'DELETE',
     entityName: 'Product',
     entityId: id,
-    changes: { status, rejectionReason },
+    changes: { status, reason },
     ipAddress: req.headers.get('x-forwarded-for') || undefined,
     userAgent: req.headers.get('user-agent') || undefined,
-  });
+  }).catch(() => {});
 
-  // Invalidate caches
-  const { CacheService } = await import('@/lib/cache');
-  await CacheService.del(`products:detail:${id}`);
-  await CacheService.invalidatePattern('products:list:*');
+  EventLogger.log(
+    status === 'active' ? 'product_approved' : status === 'rejected' ? 'product_rejected' : 'product_created',
+    { userId: user?.userId, entityType: 'product', entityId: id, metadata: { reason } }
+  ).catch(() => {});
 
-  return updatedProduct;
-}, {
-  roles: ['admin'],
-  bodySchema: updateStatusSchema,
-});
+  // Notify seller
+  NotificationService.createSystemAndAudit(
+    updated.sellerId,
+    status === 'active' ? 'Product approved' : status === 'rejected' ? 'Product rejected' : 'Product status updated',
+    status === 'rejected'
+      ? `Your product "${updated.title}" was rejected. Reason: ${reason || 'Not specified'}.`
+      : `Your product "${updated.title}" status is now ${status}.`,
+    'INFO',
+    { productId: updated.id, status, reason },
+    user?.userId,
+  ).catch(() => {});
+
+  return {
+    message: 'Status updated',
+    product: {
+      id: updated.id,
+      status: updated.status,
+      rejectionReason: updated.rejectionReason,
+    },
+  };
+}, { roles: ['admin'], bodySchema });

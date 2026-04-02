@@ -3,6 +3,8 @@
 
 import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { cookies } from 'next/headers';
+import { AuthenticationError, ForbiddenError } from '@/lib/api/errors/AppError';
+import { RoleName, ROLE_SUPER_ADMIN, isRoleAtLeast } from '@/lib/auth/roles';
 
 const jwtSecretValue = process.env.JWT_SECRET;
 if (!jwtSecretValue || jwtSecretValue.length < 32) {
@@ -17,7 +19,7 @@ const COOKIE_NAME = 'auth_token';
 export interface TokenPayload extends JWTPayload {
   userId: string;
   email: string;
-  role: string;
+  role: RoleName;
 }
 
 // Generate JWT token
@@ -95,16 +97,28 @@ export async function getCurrentUser(req?: Request): Promise<TokenPayload | null
 export async function requireAuth(req?: Request): Promise<TokenPayload> {
   const user = await getCurrentUser(req);
   if (!user) {
-    throw new Error('Unauthorized');
+    throw new AuthenticationError();
   }
   return user;
 }
 
-// Middleware helper: require seller role
-export async function requireSeller(): Promise<TokenPayload> {
-  const user = await requireAuth();
-  if (user.role !== 'seller') {
-    throw new Error('Forbidden: Seller access required');
+export async function requireRole(required: RoleName | RoleName[], req?: Request): Promise<TokenPayload> {
+  const user = await requireAuth(req);
+  const roles = Array.isArray(required) ? required : [required];
+
+  if (user.role === ROLE_SUPER_ADMIN) {
+    return user;
   }
+
+  const allowed = roles.some((role) => user.role === role || isRoleAtLeast(user.role, role));
+  if (!allowed) {
+    throw new ForbiddenError('Insufficient permissions');
+  }
+
   return user;
+}
+
+// Middleware helper: require seller role (seller or higher)
+export async function requireSeller(req?: Request): Promise<TokenPayload> {
+  return requireRole('seller', req);
 }

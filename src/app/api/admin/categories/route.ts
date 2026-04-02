@@ -53,6 +53,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { createApiHandler } from '@/lib/api/handler';
 import { AuditLogService } from '@/lib/services/audit-service';
+import { ROLE_ADMIN } from '@/lib/auth/roles';
 
 export const GET = createApiHandler(async (req) => {
   const categories = await prisma.category.findMany({
@@ -65,13 +66,23 @@ export const GET = createApiHandler(async (req) => {
 
   return categories;
 }, {
-  roles: ['admin'],
+  roles: [ROLE_ADMIN],
 });
+
+const slugSchema = z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens');
+const normalizeSlug = (slug: string) =>
+  slug
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 
 const createCategorySchema = z.object({
   name: z.string().min(2),
   nameAr: z.string().min(2),
-  slug: z.string().min(2),
+  slug: slugSchema,
   parentId: z.number().optional(),
   icon: z.string().optional(),
   sortOrder: z.number().default(0),
@@ -79,7 +90,16 @@ const createCategorySchema = z.object({
 });
 
 export const POST = createApiHandler(async (req, { body, user }) => {
-  const data = body as z.infer<typeof createCategorySchema>;
+  const parsed = body as z.infer<typeof createCategorySchema>;
+  const data = { ...parsed, slug: normalizeSlug(parsed.slug) };
+
+  // Optional: ensure parent exists if provided
+  if (data.parentId) {
+    const parent = await prisma.category.findUnique({ where: { id: data.parentId } });
+    if (!parent) {
+      return Response.json({ error: 'Parent category not found' }, { status: 400 });
+    }
+  }
 
   const category = await prisma.category.create({
     data: {
@@ -104,6 +124,6 @@ export const POST = createApiHandler(async (req, { body, user }) => {
 
   return category;
 }, {
-  roles: ['admin'],
+  roles: [ROLE_ADMIN],
   bodySchema: createCategorySchema,
 });

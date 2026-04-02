@@ -3,14 +3,15 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/jwt';
+import { ROLE_SELLER } from '@/lib/auth/roles';
 
 const updateSellerSchema = z.object({
-  businessName: z.string().max(100).optional(),
-  bio: z.string().max(500).optional(),
-  bioAr: z.string().max(500).optional(),
-  phonePublic: z.string().regex(/^[\d+\-\s()]*$/).max(20).optional(),
-  whatsappNumber: z.string().regex(/^[\d+\-\s()]*$/).max(20).optional(),
-  nationalId: z.string().max(20).optional(),
+  businessName: z.string().trim().max(100).optional(),
+  bio: z.string().trim().max(500).optional(),
+  bioAr: z.string().trim().max(500).optional(),
+  phonePublic: z.string().trim().regex(/^[\\d+\\-\\s()]*$/).max(20).optional(),
+  whatsappNumber: z.string().trim().regex(/^[\\d+\\-\\s()]*$/).max(20).optional(),
+  nationalId: z.string().trim().max(20).optional(),
 });
 
 export async function GET() {
@@ -55,6 +56,7 @@ export async function GET() {
         totalSales: seller.totalSales,
         isVerified: seller.isVerified,
         isProfileComplete: seller.isProfileComplete,
+        status: seller.status,
         user: seller.user,
       },
     });
@@ -91,9 +93,28 @@ export async function PUT(request: Request) {
       });
     }
 
+    // Ensure seller role exists and attach user to it
+    const sellerRole = await prisma.role.findUnique({ where: { name: ROLE_SELLER } });
+    if (!sellerRole) {
+      return NextResponse.json({ error: 'Seller role is not configured' }, { status: 500 });
+    }
+
+    await prisma.user.update({
+      where: { id: user.userId },
+      data: { roleId: sellerRole.id },
+    });
+
     const seller = await prisma.seller.upsert({
       where: { userId: user.userId },
-      update: { businessName, bio, bioAr, phonePublic, whatsappNumber, isProfileComplete },
+      update: {
+        businessName,
+        bio,
+        bioAr,
+        phonePublic,
+        whatsappNumber,
+        isProfileComplete,
+        // status and verification are admin-controlled; keep existing values
+      },
       create: {
         userId: user.userId,
         businessName,
@@ -102,15 +123,19 @@ export async function PUT(request: Request) {
         phonePublic: phonePublic ?? '',
         whatsappNumber,
         isProfileComplete,
+        status: 'pending',
+        isVerified: false,
       },
     });
 
-    await prisma.user.update({
-      where: { id: user.userId },
-      data: { role: 'seller' },
+    return NextResponse.json({
+      message: 'Profile updated',
+      profile: {
+        ...seller,
+        status: seller.status,
+        isProfileComplete,
+      },
     });
-
-    return NextResponse.json({ message: 'Profile updated', profile: { ...seller, isProfileComplete } });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Validation failed', details: error.errors }, { status: 400 });

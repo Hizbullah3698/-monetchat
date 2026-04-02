@@ -66,20 +66,34 @@ import { prisma } from '@/lib/db/prisma';
 import { createApiHandler } from '@/lib/api/handler';
 import { NotFoundError } from '@/lib/api/errors/AppError';
 import { AuditLogService } from '@/lib/services/audit-service';
+import { ROLE_ADMIN } from '@/lib/auth/roles';
 
 const updateCategorySchema = z.object({
   name: z.string().min(2).optional(),
   nameAr: z.string().min(2).optional(),
-  slug: z.string().min(2).optional(),
+  slug: z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens').optional(),
   parentId: z.number().optional().nullable(),
   icon: z.string().optional().nullable(),
   sortOrder: z.number().optional(),
   isActive: z.boolean().optional(),
 });
 
+const normalizeSlug = (slug: string) =>
+  slug
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
 export const PUT = createApiHandler(async (req, { body, params, user }) => {
   const { id } = params;
-  const data = body as z.infer<typeof updateCategorySchema>;
+  const parsed = body as z.infer<typeof updateCategorySchema>;
+  const data = {
+    ...parsed,
+    slug: parsed.slug ? normalizeSlug(parsed.slug) : undefined,
+  };
 
   const category = await prisma.category.findUnique({
     where: { id: parseInt(id) },
@@ -113,7 +127,7 @@ export const PUT = createApiHandler(async (req, { body, params, user }) => {
 
   return updatedCategory;
 }, {
-  roles: ['admin'],
+  roles: [ROLE_ADMIN],
   bodySchema: updateCategorySchema,
 });
 
@@ -176,5 +190,5 @@ export const DELETE = createApiHandler(async (req, { params, user }) => {
 
   return { success: true, message: 'Category deleted successfully' };
 }, {
-  roles: ['admin'],
+  roles: [ROLE_ADMIN],
 });

@@ -16,6 +16,7 @@ datasource db {
 
 
 enum ProductStatus {
+  draft
   active
   pending
   sold
@@ -46,6 +47,48 @@ enum NotificationType {
   WARNING
   ERROR
   SYSTEM
+}
+
+enum SellerStatus {
+  pending
+  approved
+  rejected
+  suspended
+}
+
+enum InquiryStatus {
+  open
+  responded
+  closed
+}
+
+enum OrderStatus {
+  draft
+  pending_payment
+  paid
+  canceled
+  expired
+}
+
+enum ReportStatus {
+  pending
+  reviewed
+  dismissed
+}
+
+enum ReviewTargetType {
+  product
+  seller
+}
+
+enum EventType {
+  product_created
+  product_approved
+  product_rejected
+  inquiry_created
+  seller_onboarded
+  chat_search
+  ai_error
 }
 
 // ============================================
@@ -127,6 +170,7 @@ model User {
   auditLogs     AuditLog[]
   notifications Notification[]
   attachments   Attachment[]
+  favorites     Favorite[]
 
   // Audit Relations
   creator       User?     @relation("UserAuditCreator", fields: [createdById], references: [id])
@@ -182,6 +226,8 @@ model Seller {
   totalSales     Int      @default(0) @map("total_sales")
   isVerified         Boolean  @default(false) @map("is_verified")
   isProfileComplete  Boolean  @default(false) @map("is_profile_complete")
+  status             SellerStatus @default(pending)
+  statusReason       String?  @db.Text
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   deletedAt          DateTime? @map("deleted_at")
@@ -253,7 +299,7 @@ model Product {
   longitude       Decimal?         @db.Decimal(11, 8)
 
   // Status
-  status          ProductStatus    @default(active)
+  status          ProductStatus    @default(pending)
   rejectionReason String?          @map("rejection_reason") @db.Text
   condition       ProductCondition @default(good)
 
@@ -279,6 +325,7 @@ model Product {
   region      Region?        @relation(fields: [regionId], references: [id])
   images      ProductImage[]
   contactLogs ContactLog[]
+  favorites   Favorite[]
   creator     User?          @relation("ProductCreator", fields: [createdById], references: [id])
   updator     User?          @relation("ProductUpdator", fields: [updatedById], references: [id])
 
@@ -544,4 +591,143 @@ model NotificationJob {
 
   @@index([status, runAt])
   @@map("notification_jobs")
+}
+
+// ============================================
+// FAVORITES
+// ============================================
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  productId String   @map("product_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@map("favorites")
+}
+
+// ============================================
+// INQUIRIES (Buyer → Seller about Product)
+// ============================================
+
+model Inquiry {
+  id         String        @id @default(uuid())
+  productId  String        @map("product_id")
+  buyerId    String        @map("buyer_id")
+  sellerId   String        @map("seller_id")
+  status     InquiryStatus @default(open)
+  message    String?       @db.Text
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer   User    @relation("InquiryBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller  User    @relation("InquirySeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+  @@index([productId, status])
+  @@map("inquiries")
+}
+
+// ============================================
+// ORDERS (foundation for future checkout)
+// ============================================
+
+model Order {
+  id          String      @id @default(uuid())
+  buyerId     String      @map("buyer_id")
+  sellerId    String      @map("seller_id")
+  productId   String      @map("product_id")
+  status      OrderStatus @default(draft)
+  price       Decimal     @db.Decimal(12, 2)
+  currency    String      @db.Char(3)
+  quantity    Int         @default(1)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  expiresAt   DateTime?   @map("expires_at")
+  metadata    Json?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer   User    @relation("OrderBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller  User    @relation("OrderSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([buyerId, status])
+  @@index([sellerId, status])
+  @@index([productId, status])
+  @@map("orders")
+}
+
+// ============================================
+// REPORTS (abuse / flagging)
+// ============================================
+
+model Report {
+  id          String       @id @default(uuid())
+  reporterId  String       @map("reporter_id")
+  targetType  String       @map("target_type") // 'product' | 'seller'
+  targetId    String       @map("target_id")
+  reason      String       @db.VarChar(100)
+  notes       String?      @db.Text
+  status      ReportStatus @default(pending)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  reviewedAt  DateTime?    @map("reviewed_at")
+  reviewedBy  String?      @map("reviewed_by")
+
+  reporter User   @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+  @@index([reporterId, targetType, targetId])
+  @@map("reports")
+}
+
+// ============================================
+// REVIEWS
+// ============================================
+
+model Review {
+  id          String           @id @default(uuid())
+  reviewerId  String           @map("reviewer_id")
+  targetType  ReviewTargetType @map("target_type")
+  productId   String?          @map("product_id")
+  sellerId    String?          @map("seller_id")
+  rating      Int              @db.SmallInt
+  comment     String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  reviewer User    @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  seller   User?   @relation("ReviewSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, productId])
+  @@index([targetType, sellerId])
+  @@unique([reviewerId, productId])
+  @@unique([reviewerId, sellerId])
+  @@map("reviews")
+}
+
+// ============================================
+// EVENT LOGS (lightweight analytics/observability)
+// ============================================
+
+model EventLog {
+  id        String    @id @default(uuid())
+  type      EventType
+  userId    String?   @map("user_id")
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([entityType, entityId])
+  @@map("event_logs")
 }

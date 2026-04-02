@@ -47,6 +47,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/jwt';
 import { prisma } from '@/lib/db/prisma';
 import { z } from 'zod';
+import { profileUpdateSchema } from '@/lib/validation/profile';
 
 export async function GET() {
   try {
@@ -119,11 +120,6 @@ export async function GET() {
 }
 
 // PATCH: Update current user profile
-const updateProfileSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  phone: z.string().max(20).optional(),
-});
-
 export async function PATCH(request: NextRequest) {
   try {
     const tokenPayload = await getCurrentUser();
@@ -132,19 +128,27 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const data = updateProfileSchema.parse(body);
+    const data = profileUpdateSchema.parse(body);
 
     const updated = await prisma.user.update({
       where: { id: tokenPayload.userId },
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.phone !== undefined && { phone: data.phone }),
+        ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
+        ...(data.countryCode !== undefined && { countryCode: data.countryCode }),
+        ...(data.regionId !== undefined && { regionId: data.regionId }),
+        ...(data.preferredLanguage !== undefined && { preferredLanguage: data.preferredLanguage }),
       },
       select: {
         id: true,
         email: true,
         name: true,
         phone: true,
+        avatarUrl: true,
+        countryCode: true,
+        regionId: true,
+        preferredLanguage: true,
       },
     });
 

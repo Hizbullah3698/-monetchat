@@ -44,12 +44,39 @@ import { createApiHandler } from '@/lib/api/handler';
 import { paginationSchema, getPaginationParams, formatPaginatedResponse } from '@/lib/api/pagination';
 import { ValidationError, ForbiddenError } from '@/lib/api/errors/AppError';
 import { CacheService } from '@/lib/cache';
+import { ROLE_SELLER, ROLE_ADMIN, ROLE_SUPER_ADMIN } from '@/lib/auth/roles';
+import { EventLogger } from '@/lib/services/event-logger.service';
 
 const PRODUCTS_LIST_CACHE_TTL = 300; // 5 minutes
 
+const publicQuerySchema = paginationSchema.extend({
+  category: z.string().optional(),
+  minPrice: z.string().optional(),
+  maxPrice: z.string().optional(),
+  country: z.string().optional(),
+  region: z.string().optional(),
+  seller: z.string().optional(),
+  condition: z.enum(['new', 'like_new', 'good', 'fair', 'poor']).optional(),
+  q: z.string().optional(),
+  sort: z.enum(['newest', 'oldest', 'price_asc', 'price_desc', 'popular']).default('newest'),
+});
+
 // GET: List products with filters
 export const GET = createApiHandler(async (req, { query }) => {
-  const { page, limit, sort, country: countryCode = 'KW', category: categorySlug, minPrice, maxPrice, region: regionId, seller: sellerId, status = 'active' } = query;
+  const {
+    page,
+    limit,
+    sort,
+    country: countryCode = 'KW',
+    category: categorySlug,
+    minPrice,
+    maxPrice,
+    region: regionId,
+    seller: sellerId,
+    condition,
+    q,
+  } = query;
+  const status = 'active';
 
   const { skip, take } = getPaginationParams({ 
     page: (page as number) || 1, 
@@ -79,6 +106,17 @@ export const GET = createApiHandler(async (req, { query }) => {
 
   if (sellerId) {
     where.sellerId = sellerId as string;
+  }
+
+  if (condition) {
+    where.condition = condition;
+  }
+
+  if (q) {
+    where.OR = [
+      { title: { contains: q, mode: 'insensitive' } },
+      { description: { contains: q, mode: 'insensitive' } },
+    ];
   }
 
   if (minPrice || maxPrice) {
@@ -170,15 +208,7 @@ export const GET = createApiHandler(async (req, { query }) => {
 
   return response;
 }, {
-  querySchema: paginationSchema.extend({
-    category: z.string().optional(),
-    minPrice: z.string().optional(),
-    maxPrice: z.string().optional(),
-    country: z.string().optional(),
-    region: z.string().optional(),
-    seller: z.string().optional(),
-    status: z.string().optional(),
-  })
+  querySchema: publicQuerySchema
 });
 
 /**
@@ -213,9 +243,7 @@ const createProductSchema = z.object({
   categorySlug: z.string().optional(),
 });
 
-export const POST = createApiHandler(async (req, { body }) => {
-  // Require authentication
-  const user = await requireAuth();
+export const POST = createApiHandler(async (req, { body, user }) => {
 
   const validatedData = body as z.infer<typeof createProductSchema>;
 
@@ -229,29 +257,33 @@ export const POST = createApiHandler(async (req, { body }) => {
 
   // Get or auto-create seller profile
   let seller = await prisma.seller.findUnique({
-    where: { userId: user.userId },
+    where: { userId: user!.userId },
     include: { user: { select: { countryCode: true, phone: true } } },
   });
 
   if (!seller) {
     const dbUser = await prisma.user.findUnique({
-      where: { id: user.userId },
+      where: { id: user!.userId },
       select: { countryCode: true, phone: true, name: true },
     });
 
     seller = await prisma.seller.create({
       data: {
-        userId: user.userId,
+        userId: user!.userId,
         phonePublic: dbUser?.phone || '',
         businessName: dbUser?.name || undefined,
       },
       include: { user: { select: { countryCode: true, phone: true } } },
     });
 
-    await prisma.user.update({
-      where: { id: user.userId },
-      data: { role: 'seller' },
-    });
+    // attach seller role by id
+    const sellerRole = await prisma.role.findUnique({ where: { name: ROLE_SELLER } });
+    if (sellerRole) {
+      await prisma.user.update({
+        where: { id: user!.userId },
+        data: { roleId: sellerRole.id },
+      });
+    }
   }
 
   const countryCode = seller.user.countryCode;
@@ -291,11 +323,15 @@ export const POST = createApiHandler(async (req, { body }) => {
     if (category) categoryId = category.id;
   }
 
+  if (!categoryId) {
+    throw new ValidationError('Category not found or not provided');
+  }
+
   // Create product with images in transaction
   const product = await prisma.$transaction(async (tx) => {
     const newProduct = await tx.product.create({
       data: {
-        sellerId: user.userId,
+        sellerId: user!.userId,
         title: validatedData.title,
         titleAr: validatedData.titleAr || aiAnalysis?.title_ar,
         description: validatedData.description || aiAnalysis?.description,
@@ -307,6 +343,7 @@ export const POST = createApiHandler(async (req, { body }) => {
         categoryId,
         countryCode,
         regionId: validatedData.regionId,
+        status: 'pending',
       },
     });
 
@@ -324,6 +361,8 @@ export const POST = createApiHandler(async (req, { body }) => {
 
     return newProduct;
   });
+
+  EventLogger.log('product_created', { userId: user!.userId, entityType: 'product', entityId: product.id }).catch(() => {});
 
   // Generate embedding and index in Qdrant via Background Job
   enqueueIndexProduct(product.id).catch((err) => {
@@ -351,6 +390,8 @@ export const POST = createApiHandler(async (req, { body }) => {
       : null,
   };
 }, {
-  bodySchema: createProductSchema
+  bodySchema: createProductSchema,
+  requireAuth: true,
+  roles: [ROLE_SELLER, ROLE_ADMIN, ROLE_SUPER_ADMIN],
 });
 

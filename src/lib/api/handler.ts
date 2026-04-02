@@ -4,6 +4,7 @@ import { handleApiError, successResponse } from './response';
 import { ValidationError, AuthenticationError, ForbiddenError } from './errors/AppError';
 import { requireAuth } from '@/lib/auth/jwt';
 import { logger } from '@/lib/logger';
+import { ROLE_SUPER_ADMIN, RoleName } from '@/lib/auth/roles';
 
 export type ApiHandler<T = any> = (
   req: NextRequest,
@@ -44,7 +45,12 @@ export function createApiHandler<TBody = any, TQuery = any, TResult = any>(
       if (options.requireAuth || (options.roles && options.roles.length > 0)) {
         try {
           user = await requireAuth(req);
-          if (options.roles && options.roles.length > 0 && !options.roles.includes(user.role)) {
+          if (
+            options.roles &&
+            options.roles.length > 0 &&
+            user.role !== ROLE_SUPER_ADMIN &&
+            !(options.roles as RoleName[]).includes(user.role as RoleName)
+          ) {
             throw new ForbiddenError('Insufficient permissions');
           }
         } catch (e) {
