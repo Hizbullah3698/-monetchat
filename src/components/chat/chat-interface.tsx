@@ -43,6 +43,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { VoiceButton } from "./voice-button";
 import { useLanguage } from "@/context/language-context";
+import { SellForm } from "./sell-form";
 import { useAppMode } from "@/context/app-mode-context";
 import { useAuth } from "@/context/auth-context";
 import type { TranslationKey } from "@/lib/i18n/translations";
@@ -86,7 +87,7 @@ export interface ChatMessage {
   contentLanguage?: string;
 }
 
-const MESSAGES_STORAGE_PREFIX = "Monetchat_messages_";
+const MESSAGES_STORAGE_PREFIX = "pickpic_messages_";
 
 const CATEGORIES = [
   "vehicles",
@@ -706,7 +707,7 @@ export function ChatInterface({
   const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const [overlayProducts, setOverlayProducts] = useState<ChatProduct[] | null>(null);
   const [productContentLanguage, setProductContentLanguage] = useState<string | null>(null);
-  const [showSellOptions, setShowSellOptions] = useState(false);
+  const [isSellMode, setIsSellMode] = useState(false);
   const [showSellerProfileModal, setShowSellerProfileModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -889,10 +890,6 @@ export function ChatInterface({
           body: JSON.stringify({
             session_id: sessionId,
             message: text || undefined,
-            messages: messages
-              .filter((m) => m.text)
-              .map((m) => ({ role: m.role, content: m.text }))
-              .concat({ role: "user", content: text || "" }),
             image_url: imageUrl || undefined,
             location: { country_code: "KW", language: locale },
           }),
@@ -907,6 +904,7 @@ export function ChatInterface({
         const decoder = new TextDecoder();
         let buffer = "";
         let receivedAnalysis: Record<string, unknown> | null = null;
+        let assistantText = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -934,10 +932,11 @@ export function ChatInterface({
 
                 case "delta":
                   setStreamingStatus(null);
+                  assistantText += parsed.content;
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === aiMsgId
-                        ? { ...m, text: m.text + parsed.content }
+                        ? { ...m, text: assistantText }
                         : m
                     )
                   );
@@ -992,21 +991,11 @@ export function ChatInterface({
 
                 case "done": {
                   setStreamingStatus(null);
-                  setIsLoading(false);
                   const newSessionId = parsed.session_id;
 
                   if (newSessionId && newSessionId !== sessionId) {
                     setSessionId(newSessionId);
-                    if (appModeCtx) {
-                      if (!authUser) {
-                        try {
-                           const stored = localStorage.getItem("Monetchat_chats");
-                           const chatsList = stored ? JSON.parse(stored) : [];
-                           const newTitle = text ? text.slice(0, 50) : "New Chat";
-                           chatsList.unshift({ id: newSessionId, title: newTitle, createdAt: Date.now() });
-                           localStorage.setItem("Monetchat_chats", JSON.stringify(chatsList));
-                        } catch(e) {}
-                      }
+                    if (authUser && appModeCtx) {
                       appModeCtx.refreshChats();
                       skipNextReload.current = true;
                       appModeCtx.selectChat(newSessionId);
@@ -1437,7 +1426,51 @@ export function ChatInterface({
     sendMessage(text);
   };
 
+  const handleBuyStart = useCallback(() => {
+    if (messages.length > 0) return;
+    
+    const welcomeMsg: ChatMessage = {
+      id: "buy-welcome-" + Date.now(),
+      role: "assistant",
+      text: locale === "ar" 
+        ? "مرحباً! أنا هنا لمساعدتك في العثور على ما تبحث عنه في الكويت. ماذا تريد أن تشتري اليوم؟" 
+        : "Hi! I'm here to help you find whatever you need in Kuwait. What would you like to buy today?"
+    };
+    
+    setMessages([welcomeMsg]);
+    
+    // Focus input after state update
+    setTimeout(() => {
+      inputRef?.current?.focus();
+    }, 100);
+  }, [messages.length, locale]);
+
   const showWelcome = messages.length === 0 && !messagesLoading;
+
+  if (isSellMode) {
+    return (
+      <div className={cn("flex flex-col relative h-full bg-white", className)}>
+        <SellForm 
+          onCancel={() => setIsSellMode(false)}
+          onSuccess={(product) => {
+            setIsSellMode(false);
+            setMessages(prev => [
+              ...prev,
+              {
+                id: Date.now().toString(),
+                role: "assistant",
+                text: "Your listing has been published successfully!",
+                published: { id: product.id, title: product.title }
+              }
+            ]);
+            if (appModeCtx) {
+              appModeCtx.updateChatTitle(product.title);
+            }
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={cn("flex flex-col relative", className)}>
@@ -1499,10 +1532,7 @@ export function ChatInterface({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     data-testid="buy-suggestion"
-                    onClick={() => {
-                      setShowSellOptions(false);
-                      inputRef?.current?.focus?.();
-                    }}
+                    onClick={handleBuyStart}
                     className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                   >
                     <ShoppingBag className="h-6 w-6 text-primary" />
@@ -1510,45 +1540,13 @@ export function ChatInterface({
                   </button>
                   <button
                     data-testid="sell-suggestion"
-                    onClick={() => setShowSellOptions((v) => !v)}
+                    onClick={() => setIsSellMode(true)}
                     className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                   >
                     <Store className="h-6 w-6 text-primary" />
                     <span>{t("chat.mode.sell")}</span>
                   </button>
                 </div>
-
-                {/* Sell sub-options */}
-                <AnimatePresence>
-                  {showSellOptions && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-2 gap-2 overflow-hidden"
-                    >
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
-                      >
-                        <ImageIcon className="h-4 w-4 shrink-0" />
-                        <span>{t("chat.mode.uploadPhoto")}</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setInputValue(t("chat.sellDescribePrompt"));
-                          setShowSellOptions(false);
-                          inputRef?.current?.focus?.();
-                        }}
-                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
-                      >
-                        <Pencil className="h-4 w-4 shrink-0" />
-                        <span>{t("chat.mode.describeItem")}</span>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
             </div>
           )}
