@@ -1429,21 +1429,15 @@ export function ChatInterface({
   const handleBuyStart = useCallback(() => {
     if (messages.length > 0) return;
     
-    const welcomeMsg: ChatMessage = {
-      id: "buy-welcome-" + Date.now(),
-      role: "assistant",
-      text: locale === "ar" 
-        ? "مرحباً! أنا هنا لمساعدتك في العثور على ما تبحث عنه في الكويت. ماذا تريد أن تشتري اليوم؟" 
-        : "Hi! I'm here to help you find whatever you need in Kuwait. What would you like to buy today?"
-    };
-    
-    setMessages([welcomeMsg]);
+    // Send the initial "Buy" intent message from the user
+    // This will hide the welcome screen and trigger the AI search
+    sendMessage(t("chat.mode.buy"));
     
     // Focus input after state update
     setTimeout(() => {
       inputRef?.current?.focus();
     }, 100);
-  }, [messages.length, locale]);
+  }, [messages.length, t, sendMessage]);
 
   const showWelcome = messages.length === 0 && !messagesLoading;
 
