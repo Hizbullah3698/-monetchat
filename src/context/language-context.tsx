@@ -30,7 +30,7 @@ const LanguageContext = createContext<LanguageContextValue>({
   t: (key) => key,
 });
 
-const STORAGE_KEY = "Monetchat_locale";
+const STORAGE_KEY = "pickpic_locale";
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(defaultLocale);

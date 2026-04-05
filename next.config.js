@@ -1,11 +1,6 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: 'standalone',
-    experimental: {
-        instrumentationHook: true,
-    },
-    optimizeFonts: false,
     reactStrictMode: true,
     transpilePackages: ['lucide-react'],
     eslint: {

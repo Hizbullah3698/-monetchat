@@ -1,0 +1,5 @@
+[  124088ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://127.0.0.1:9002/_next/static/chunks/node_modules_32ba19d8._.js:2903
+[  124091ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://127.0.0.1:9002/_next/static/chunks/node_modules_32ba19d8._.js:2903
+[  125291ms] [WARNING] Image with src "https://s3.eu-north-1.amazonaws.com/pickpic.app/products/07842f57-9e7b-405a-9192-17ddde8ab9bb.webp" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes @ http://127.0.0.1:9002/_next/static/chunks/node_modules_next_dist_2ecbf5fa._.js:1073
+[  169762ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://127.0.0.1:9002/_next/static/chunks/node_modules_32ba19d8._.js:2903
+[  169848ms] [WARNING] Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @ http://127.0.0.1:9002/_next/static/chunks/node_modules_32ba19d8._.js:2903

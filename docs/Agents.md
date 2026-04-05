@@ -1,10 +1,10 @@
-# Monetchat — Agent Onboarding Guide
+# PickPic — Agent Onboarding Guide
 
-Welcome! This document gives AI coding agents the essential context to work effectively on the Monetchat codebase.
+Welcome! This document gives AI coding agents the essential context to work effectively on the PickPic codebase.
 
 ---
 
-## What is Monetchat?
+## What is PickPic?
 
 A mobile-first marketplace app (like OLX/Craigslist) targeting Kuwait.
 

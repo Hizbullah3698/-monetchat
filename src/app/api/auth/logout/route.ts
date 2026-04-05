@@ -1,60 +1,21 @@
-/**
- * @openapi
- * /api/auth/logout:
- *   post:
- *     summary: User logout
- *     tags: [Auth]
- *     description: Invalidates the user's refresh token and clears the cookie.
- *     responses:
- *       200:
- *         description: Logged out successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *       500:
- *         description: Internal server error
- */
+// User Logout API
+// POST /api/auth/logout
+
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { prisma } from '@/lib/db/prisma';
-import { AuditLogService } from '@/lib/services/audit-service';
+import { clearAuthCookie } from '@/lib/auth/jwt';
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
-    const cookieStore = await cookies();
-    const refreshToken = cookieStore.get('refreshToken')?.value;
+    await clearAuthCookie();
 
-    if (refreshToken) {
-      // Invalidate token in database
-      const tokenRecord = await prisma.refreshToken.update({
-        where: { token: refreshToken },
-        data: { revokedAt: new Date() },
-      }).catch(() => null);
-      
-      if (tokenRecord) {
-        await AuditLogService.logAction({
-          userId: tokenRecord.userId,
-          action: 'LOGOUT',
-          entityName: 'User',
-          entityId: tokenRecord.userId,
-          ipAddress: req.headers.get('x-forwarded-for') || undefined,
-          userAgent: req.headers.get('user-agent') || undefined,
-        });
-      }
-    }
-
-    const response = NextResponse.json({ message: 'Logged out successfully' });
-    
-    // Clear cookie
-    response.cookies.delete('refreshToken');
-
-    return response;
+    return NextResponse.json({
+      message: 'Logged out successfully',
+    });
   } catch (error) {
     console.error('Logout error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Logout failed' },
+      { status: 500 }
+    );
   }
 }

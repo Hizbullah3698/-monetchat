@@ -1,63 +1,42 @@
 // Seller Listings API - Prisma-based
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { z } from 'zod';
-import { createApiHandler } from '@/lib/api/handler';
-import { ProductStatus } from '@prisma/client';
+import { getCurrentUser } from '@/lib/auth/jwt';
 
-const querySchema = z.object({
-  status: z.nativeEnum(ProductStatus).optional(),
-  q: z.string().optional(),
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
-  sort: z.enum(['updated', 'created']).default('updated'),
-  order: z.enum(['asc', 'desc']).default('desc'),
-});
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-export const GET = createApiHandler(async (_request, { query, user }) => {
-    const { status, q, sort, order } = query;
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-
-    // Ensure seller exists
     const seller = await prisma.seller.findUnique({
-      where: { userId: user!.userId },
-      select: { userId: true },
+      where: { userId: user.userId },
     });
+
     if (!seller) {
-      return {
-        products: [],
-        meta: { pagination: { page, limit, total: 0, totalPages: 0 } },
-      };
+      return NextResponse.json({ products: [], listings: [] });
     }
 
-    const where: any = { sellerId: user!.userId, deletedAt: null };
-    if (status) where.status = status;
-    if (q) {
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
-      ];
-    }
+    const { searchParams } = new URL(request.url);
+    const statusParam = searchParams.get('status');
 
-    const orderBy = sort === 'created' ? { createdAt: order } : { updatedAt: order };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = { sellerId: user.userId };
+    if (statusParam) where.status = statusParam;
 
-    const [items, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          images: {
-            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
-          },
-          category: { select: { name: true, nameAr: true, slug: true } },
+    const listings = await prisma.product.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        images: {
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
         },
-      }),
-      prisma.product.count({ where }),
-    ]);
+        category: { select: { name: true, nameAr: true, slug: true } },
+      },
+    });
 
-    const data = items.map((p) => ({
+    const mapped = listings.map((p) => ({
       id: p.id,
       title: p.title,
       titleAr: p.titleAr,
@@ -65,6 +44,10 @@ export const GET = createApiHandler(async (_request, { query, user }) => {
       currency: p.currency,
       status: p.status,
       condition: p.condition,
+      images: p.images.map((img) => ({
+        url: img.url,
+        isPrimary: img.isPrimary,
+      })),
       imageUrl: p.images[0]?.url || null,
       category: p.category,
       viewCount: p.viewCount,
@@ -73,15 +56,12 @@ export const GET = createApiHandler(async (_request, { query, user }) => {
       updatedAt: p.updatedAt,
     }));
 
-    return {
-      products: data,
-      meta: {
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      },
-    };
-}, { requireAuth: true, querySchema });
+    return NextResponse.json({
+      products: mapped,
+      listings: mapped,
+    });
+  } catch (error) {
+    console.error('Seller Listings API Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

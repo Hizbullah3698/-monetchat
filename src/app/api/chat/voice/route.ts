@@ -2,7 +2,7 @@
 // Accepts audio file and returns transcript
 
 import { NextRequest, NextResponse } from 'next/server';
-import { transcribeAudio } from '@/lib/ai/ai-service';
+import { transcribeAudio } from '@/lib/ai/openai';
 
 export async function POST(request: NextRequest) {
   try {

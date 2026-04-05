@@ -25,12 +25,12 @@ const s3 = new S3Client({
   responseChecksumValidation: "WHEN_REQUIRED",
 });
 
-const BUCKET = process.env.S3_BUCKET_NAME || 'Monetchat-media';
-// Use path-style URLs (buckets with dots like "Monetchat.app" break virtual-hosted SSL certs)
+const BUCKET = process.env.S3_BUCKET_NAME || 'pickpic-media';
+// Use path-style URLs (buckets with dots like "pickpic.app" break virtual-hosted SSL certs)
 const CDN_URL = process.env.S3_CDN_URL || `https://s3.${process.env.AWS_REGION || 'me-south-1'}.amazonaws.com/${BUCKET}`;
 
 // Folder types
-type FolderType = 'products' | 'profiles' | 'temp' | 'chat' | 'documents';
+type FolderType = 'products' | 'profiles' | 'temp' | 'chat';
 
 // ============================================
 // UPLOAD FUNCTIONS
@@ -191,9 +191,6 @@ export function getExtensionFromContentType(contentType: string): string {
     'audio/webm': 'webm',
     'audio/mp4': 'm4a',
     'audio/mpeg': 'mp3',
-    'application/pdf': 'pdf',
-    'application/msword': 'doc',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   };
   return map[contentType] || 'bin';
 }

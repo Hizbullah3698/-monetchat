@@ -34,7 +34,7 @@ export default function SupportPage() {
                     </div>
                     <div className="block p-6 border rounded-lg hover:shadow-md transition-shadow">
                         <h3 className="font-bold mb-2">Email Us</h3>
-                        <p className="text-sm text-muted-foreground">support@Monetchat.com</p>
+                        <p className="text-sm text-muted-foreground">support@pickpic.com</p>
                     </div>
                 </div>
             </div>

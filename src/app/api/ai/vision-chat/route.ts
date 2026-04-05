@@ -1,40 +1,6 @@
 
 import { NextResponse } from 'next/server';
 
-/**
- * @openapi
- * /api/ai/vision-chat:
- *   post:
- *     summary: Chat with AI vision model about an image
- *     tags: [AI]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - message
- *             properties:
- *               message:
- *                 type: string
- *               history:
- *                 type: array
- *                 items:
- *                   type: object
- *     responses:
- *       200:
- *         description: AI response
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 text:
- *                   type: string
- *       500:
- *         description: AI Error
- */
 export async function POST(request: Request) {
     try {
         const { message, history } = await request.json();

@@ -1,13 +1,13 @@
 USE master;
 GO
 
-IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'MonetchatDB')
+IF NOT EXISTS(SELECT * FROM sys.databases WHERE name = 'PickPicDB')
 BEGIN
-    CREATE DATABASE MonetchatDB;
+    CREATE DATABASE PickPicDB;
 END
 GO
 
-USE MonetchatDB;
+USE PickPicDB;
 GO
 
 -- 1. Locations / Countries

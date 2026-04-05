@@ -6,7 +6,7 @@ import os from 'os';
 import { checkDatabaseConnection } from '@/lib/db/prisma';
 import { checkQdrantConnection } from '@/lib/qdrant/client';
 import { checkS3Connection } from '@/lib/s3/client';
-import { checkOpenAIConnection } from '@/lib/ai/ai-service';
+import { checkOpenAIConnection } from '@/lib/ai/openai';
 
 interface ServiceStatus {
   status: 'healthy' | 'unhealthy' | 'unknown';

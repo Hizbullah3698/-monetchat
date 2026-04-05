@@ -37,7 +37,6 @@ const translations = {
   // ========================
   "chat.welcome": { en: "Welcome to PickPic!", ar: "!مرحباً بك في بيك بيك" },
   "chat.subtitle": { en: "Tell me what you're looking for", ar: "أخبرني عما تبحث عنه" },
-  "chat.buyWelcome": { en: "How can I help you find things to buy in Kuwait?", ar: "كيف يمكنني مساعدتك في العثور على أشياء لشرائها في الكويت؟" },
   "chat.placeholder": { en: "Search for anything...", ar: "...ابحث عن أي شيء" },
   "chat.imageSearch": { en: "Image search", ar: "البحث بالصورة" },
   "chat.voiceSearch": { en: "Voice search", ar: "البحث الصوتي" },

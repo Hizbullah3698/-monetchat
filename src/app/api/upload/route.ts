@@ -1,72 +1,56 @@
-// POST /api/upload - Upload file to S3
-// Accepts multipart form data, uploads to S3, returns public URL
+import { NextRequest, NextResponse } from "next/server";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth/jwt';
-import { uploadFile, getExtensionFromContentType } from '@/lib/s3/client';
-import { randomUUID } from 'crypto';
+// Initialize S3 client for RunPod Endpoint
+const s3 = new S3Client({
+  region: process.env.AWS_REGION || "us-mo-2",
+  endpoint: process.env.AWS_ENDPOINT_URL || "https://s3api-us-mo-2.runpod.io",
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
 
-// Allowed MIME types
-const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-];
-// Max file size: 5MB
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const folder = (formData.get('folder') as string) || 'temp';
+    const formData = await req.formData();
+    const file = formData.get("file") as File;
 
     if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Validate size
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: 'File too large (max 5MB)' },
-        { status: 400 }
-      );
-    }
+    // Convert file to ArrayBuffer, then to Buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    // Validate MIME type
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Only images allowed (JPEG, PNG, WebP, GIF).' },
-        { status: 400 }
-      );
-    }
+    // Generate unique filename
+    const uniqueFilename = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+    const key = `listings/${uniqueFilename}`;
 
-    // Validate folder
-    const validFolders = ['products', 'profiles', 'temp', 'chat'] as const;
-    const targetFolder = validFolders.includes(folder as typeof validFolders[number])
-      ? (folder as typeof validFolders[number])
-      : 'temp';
+    const bucketName = process.env.S3_BUCKET_NAME!;
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = getExtensionFromContentType(file.type);
-    const fileName = `${randomUUID()}.${ext}`;
-
-    const result = await uploadFile(targetFolder, fileName, buffer, file.type);
-
-    return NextResponse.json({
-      url: result.publicUrl,
-      key: result.key,
+    // Upload to S3
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: file.type,
+      ACL: 'public-read' // Just in case, though the bucket should probably be publicly accessible by policy
     });
-  } catch (error) {
-    console.error('Upload error:', error);
+
+    await s3.send(command);
+
+    // Construct the public URL returned back to the front-end
+    const publicUrl = `${process.env.AWS_ENDPOINT_URL}/${bucketName}/${key}`;
+
+    return NextResponse.json({ url: publicUrl });
+
+  } catch (error: any) {
+    console.error("Upload error:", error);
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { error: "Failed to upload file", details: error.message },
       { status: 500 }
     );
   }

@@ -43,7 +43,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { VoiceButton } from "./voice-button";
 import { useLanguage } from "@/context/language-context";
-import { SellForm } from "./sell-form";
 import { useAppMode } from "@/context/app-mode-context";
 import { useAuth } from "@/context/auth-context";
 import type { TranslationKey } from "@/lib/i18n/translations";
@@ -904,7 +903,6 @@ export function ChatInterface({
         const decoder = new TextDecoder();
         let buffer = "";
         let receivedAnalysis: Record<string, unknown> | null = null;
-        let assistantText = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -932,11 +930,10 @@ export function ChatInterface({
 
                 case "delta":
                   setStreamingStatus(null);
-                  assistantText += parsed.content;
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === aiMsgId
-                        ? { ...m, text: assistantText }
+                        ? { ...m, text: m.text + parsed.content }
                         : m
                     )
                   );
@@ -1422,23 +1419,9 @@ export function ChatInterface({
     e.target.value = "";
   };
 
-  const handleBuyStart = useCallback(() => {
-    if (messages.length > 0) return;
-    
-    const welcomeMsg: ChatMessage = {
-      id: "buy-welcome-" + Date.now(),
-      role: "assistant",
-      text: t("chat.buyWelcome")
-    };
-    
-    setMessages([welcomeMsg]);
-    setShowSellOptions(false);
-    
-    // Focus input after state update
-    setTimeout(() => {
-      inputRef?.current?.focus();
-    }, 100);
-  }, [messages.length, t, setShowSellOptions]);
+  const handleSuggestion = (text: string) => {
+    sendMessage(text);
+  };
 
   const showWelcome = messages.length === 0 && !messagesLoading;
 
@@ -1502,7 +1485,10 @@ export function ChatInterface({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     data-testid="buy-suggestion"
-                    onClick={handleBuyStart}
+                    onClick={() => {
+                      setShowSellOptions(false);
+                      inputRef?.current?.focus?.();
+                    }}
                     className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                   >
                     <ShoppingBag className="h-6 w-6 text-primary" />
@@ -1985,5 +1971,16 @@ export function ChatInterface({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+<Button asChild variant="outline" className="flex-1">
+  <Link href="/register" onClick={() => setShowLoginPrompt(false)}>
+    {locale === "ar" ? "إنشاء حساب" : "Sign Up"}
+  </Link>
+</Button>
+          </div >
+        </DialogContent >
+      </Dialog >
+    </div >
   );
 }

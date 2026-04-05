@@ -23,7 +23,7 @@ async function seed() {
         const adminPass = await bcrypt.hash('AdminSecret1!', 10);
 
         // Admin
-        const adminEmail = 'admin@Monetchat.com';
+        const adminEmail = 'admin@pickpic.com';
         await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM users WHERE email = '${adminEmail}')
             BEGIN

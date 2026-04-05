@@ -35,7 +35,7 @@ interface AppModeContextType {
 
 const AppModeContext = createContext<AppModeContextType | undefined>(undefined);
 
-const STORAGE_KEY_CHATS = "Monetchat_chats";
+const STORAGE_KEY_CHATS = "pickpic_chats";
 
 export function AppModeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -117,7 +117,7 @@ export function AppModeProvider({ children }: { children: ReactNode }) {
 
     // Remove local messages
     try {
-      localStorage.removeItem(`Monetchat_messages_${id}`);
+      localStorage.removeItem(`pickpic_messages_${id}`);
     } catch {
       // ignore
     }

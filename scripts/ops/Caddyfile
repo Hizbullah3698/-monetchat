@@ -1,4 +1,4 @@
-# Caddyfile for Monetchat (ecom.lumen-path.com)
+# Caddyfile for PickPic (ecom.lumen-path.com)
 
 ecom.lumen-path.com {
     # Reverse Proxy to Next.js App (Port 4500)

@@ -1,7 +1,7 @@
-# Monetchat Development Progress
+# PickPic Development Progress
 
 ## Project Overview
-**Project:** Monetchat - AI-Powered Chat-to-Buy/Sell Marketplace
+**Project:** PickPic - AI-Powered Chat-to-Buy/Sell Marketplace
 **Version:** 1.0 (MVP)
 **Target Market:** Kuwait
 **Last Updated:** February 11, 2026

@@ -1,163 +1,134 @@
-/**
- * @openapi
- * /api/auth/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *               - name
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 minLength: 8
- *               name:
- *                 type: string
- *               countryCode:
- *                 type: string
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 userId:
- *                   type: string
- *       400:
- *         description: Validation error or user already exists
- *       500:
- *         description: Internal server error
- */
-import { NextResponse } from 'next/server';
+// User Registration API
+// POST /api/auth/register
+
+import { NextRequest, NextResponse } from 'next/server';
+import { hash } from 'bcryptjs';
+import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { hashPassword, generateToken } from '@/lib/auth';
-import { registerSchema } from '@/lib/validation/auth';
-import { ZodError } from 'zod';
-import { NotificationService } from '@/services/notification.service';
-import { logger } from '@/lib/logger';
-export async function POST(req: Request) {
+import { generateToken, setAuthCookie } from '@/lib/auth/jwt';
+import { aiLimiter, getIp } from '@/lib/rate-limiter';
+
+// Validation schema
+const registerSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  phone: z.string().max(20).optional(),
+  role: z.enum(['buyer', 'seller']).default('buyer'),
+  countryCode: z.string().length(2, 'Invalid country code').default('KW'),
+  preferredLanguage: z.enum(['en', 'ar']).default('ar'),
+  // Seller-specific fields
+  phonePublic: z.string().optional(),
+  businessName: z.string().optional(),
+});
+
+export async function POST(request: NextRequest) {
   try {
-    let body: Record<string, unknown>;
+    // Rate limit: 20 attempts per hour per IP
+    const ip = getIp(request);
+    await aiLimiter.consume(ip, 1).catch(() => {
+      throw Object.assign(new Error('Too many requests'), { isRateLimit: true });
+    });
 
-    // Safely parse the request body
-    try {
-      body = await req.json();
-    } catch (parseErr) {
-      // Fallback: try reading as text (in case the stream was consumed by Next.js)
-      try {
-        const raw = await req.text().catch(() => '');
-        if (!raw) {
-          return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
-        }
-        body = JSON.parse(raw);
-      } catch {
-        return NextResponse.json({ error: 'Invalid request body - please check your input' }, { status: 400 });
-      }
-    }
-
+    const body = await request.json();
     const validatedData = registerSchema.parse(body);
 
+    // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+      where: { email: validatedData.email.toLowerCase() },
     });
 
     if (existingUser) {
-      logger.warn({ event: 'auth.register.failed', email: validatedData.email, reason: 'Email already in use' }, 'Registration failed');
       return NextResponse.json(
-        { error: 'User with this email already exists' },
+        { error: 'Email already registered' },
+        { status: 409 }
+      );
+    }
+
+    // Hash password
+    const passwordHash = await hash(validatedData.password, 12);
+
+    // Create user with transaction
+    const user = await prisma.$transaction(async (tx) => {
+      // Create user
+      const newUser = await tx.user.create({
+        data: {
+          email: validatedData.email.toLowerCase(),
+          passwordHash,
+          name: validatedData.name,
+          phone: validatedData.phone || null,
+          role: validatedData.role,
+          countryCode: validatedData.countryCode,
+          preferredLanguage: validatedData.preferredLanguage,
+        },
+      });
+
+      // If seller, create seller profile
+      if (validatedData.role === 'seller') {
+        if (!validatedData.phonePublic) {
+          throw new Error('Phone number is required for sellers');
+        }
+
+        await tx.seller.create({
+          data: {
+            userId: newUser.id,
+            phonePublic: validatedData.phonePublic,
+            businessName: validatedData.businessName,
+          },
+        });
+      }
+
+      return newUser;
+    });
+
+    // Generate JWT token
+    const token = await generateToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    // Set auth cookie
+    await setAuthCookie(token);
+
+    return NextResponse.json(
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          countryCode: user.countryCode,
+          preferredLanguage: user.preferredLanguage,
+        },
+        token,
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    if (error instanceof Error && (error as { isRateLimit?: boolean }).isRateLimit) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
+
+    console.error('Registration error:', error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
         { status: 400 }
       );
     }
 
-    let hashedPassword: string;
-    try {
-      hashedPassword = await hashPassword(validatedData.password);
-    } catch(hashErr: any) {
-      console.error('[register] hashPassword failed:', hashErr.message);
-      throw hashErr;
-    }
-    const verificationToken = generateToken();
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-    // Find or fallback-create the user role
-    let userRole = await prisma.role.findUnique({
-      where: { name: 'user' },
-    });
-
-    if (!userRole) {
-      // Auto-create baseline roles if seeding was skipped
-      userRole = await prisma.role.upsert({
-        where: { name: 'user' },
-        update: {},
-        create: { name: 'user', description: 'Standard user role' },
-      });
-    }
-
-    const user = await prisma.user.create({
-      data: {
-        email: validatedData.email,
-        passwordHash: hashedPassword,
-        name: validatedData.name,
-        roleId: userRole.id,
-        countryCode: validatedData.countryCode,
-        verificationToken,
-        verificationTokenExpires,
-      },
-    });
-
-    // In a real app, send email here
-    logger.debug({ event: 'auth.register.token_generated', email: user.email }, `Verification token generated`);
-
-    // Enqueue welcome email notification (non-fatal if email not configured)
-    try {
-      await NotificationService.enqueueEmail(
-        user.email,
-        'Welcome to Monetchat!',
-        `<h1>Welcome, ${user.name}!</h1><p>We are excited to have you on board.</p>`
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
       );
-    } catch (notifErr) {
-      logger.warn({ event: 'auth.register.email_failed', err: notifErr }, 'Welcome email could not be enqueued, continuing registration');
     }
-
-    // Enqueue system notification for the welcome (non-fatal)
-    try {
-      await NotificationService.enqueueSystemNotification(
-        user.id,
-        'Welcome!',
-        'Thank you for registering on Monetchat. Complete your profile to get started.',
-        'SYSTEM'
-      );
-    } catch (notifErr) {
-      logger.warn({ event: 'auth.register.notif_failed', err: notifErr }, 'System notification could not be enqueued, continuing registration');
-    }
-
-    logger.info({ event: 'auth.register.success', userId: user.id, email: user.email }, 'User registered successfully');
 
     return NextResponse.json(
-      { message: 'User registered successfully. Please verify your email.', userId: user.id },
-      { status: 201 }
+      { error: 'Registration failed' },
+      { status: 500 }
     );
-  } catch (error) {
-    if (error instanceof ZodError) {
-      logger.warn({ event: 'auth.register.failed', reason: 'Validation error', errors: error.errors }, 'Registration validation failed');
-      return NextResponse.json({ error: error.errors }, { status: 400 });
-    }
-    console.error('[register] CAUGHT ERROR:', (error as any)?.message ?? String(error), 'code:', (error as any)?.code);
-    logger.error({ event: 'auth.register.error', err: error }, 'Registration error');
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,8 +1,7 @@
 // Prisma Client Singleton
 // Prevents multiple instances in development due to hot reloading
 
-import { PrismaClient, Prisma } from '@prisma/client';
-import { logger } from '@/lib/logger';
+import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -11,29 +10,11 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: [
-      { emit: 'event', level: 'query' },
-      { emit: 'event', level: 'error' },
-      { emit: 'event', level: 'info' },
-      { emit: 'event', level: 'warn' },
-    ],
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
   });
-
-prisma.$on('query' as never, (e: Prisma.QueryEvent) => {
-  logger.debug({ query: e.query, durationMs: e.duration }, 'Prisma Query');
-});
-
-prisma.$on('error' as never, (e: Prisma.LogEvent) => {
-  logger.error({ err: e.message }, 'Prisma Error');
-});
-
-prisma.$on('warn' as never, (e: Prisma.LogEvent) => {
-  logger.warn({ msg: e.message }, 'Prisma Warning');
-});
-
-prisma.$on('info' as never, (e: Prisma.LogEvent) => {
-  logger.info({ msg: e.message }, 'Prisma Info');
-});
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

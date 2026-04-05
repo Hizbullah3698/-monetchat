@@ -11,7 +11,6 @@ import type OpenAI from "openai";
 
 export interface SearchProductsParams {
   search_query: string;
-  category?: string;
   min_price?: number;
   max_price?: number;
   region_id?: number;
@@ -55,20 +54,6 @@ const SEARCH_PRODUCTS_TOOL: OpenAI.ChatCompletionTool = {
           description:
             "Natural language search query describing what the user wants to buy. Should be in English for best results.",
         },
-        category: {
-          type: "string",
-          enum: [
-            "vehicles",
-            "electronics",
-            "property",
-            "fashion",
-            "furniture",
-            "services",
-            "jobs",
-            "other",
-          ],
-          description: "Product category if the user mentioned a specific category",
-        },
         min_price: {
           type: "number",
           description: "Minimum price in local currency (KWD/SAR) if user specified a budget",
@@ -92,7 +77,7 @@ const ASK_CLARIFICATION_TOOL: OpenAI.ChatCompletionTool = {
   function: {
     name: "ask_clarification",
     description:
-      "Ask the user follow-up questions to gather more information before searching or taking action. Use when the user's intent is unclear, too vague, or you need more details to help them effectively.",
+      "Ask the user follow-up questions ONLY AFTER you have already performed a search and shown results. NEVER use this tool before an initial search. If a user asks for something vague like 'car' or 'apartment', you must immediately use search_products first to show baseline results, and only use this tool afterward to help them refine.",
     parameters: {
       type: "object",
       properties: {

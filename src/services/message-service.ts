@@ -1,5 +1,5 @@
-const STORAGE_KEY = 'Monetchat_mock_threads';
-const MESSAGES_KEY = 'Monetchat_mock_messages';
+const STORAGE_KEY = 'pickpic_mock_threads';
+const MESSAGES_KEY = 'pickpic_mock_messages';
 
 export interface Thread {
     id: string;

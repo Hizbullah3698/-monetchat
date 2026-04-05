@@ -12,8 +12,8 @@ const qdrant = new QdrantClient({
 // Collection name
 const PRODUCTS_COLLECTION = 'products';
 
-// Vector dimensions (Ollama nomic-embed-text)
-const VECTOR_SIZE = 192;
+// Vector dimensions (nomic-embed-text via Ollama)
+const VECTOR_SIZE = 768;
 
 // ============================================
 // BM25 SPARSE TOKENIZER
@@ -116,10 +116,6 @@ export async function initializeQdrant(): Promise<void> {
       { field_name: 'price', field_schema: 'float' as const },
       { field_name: 'status', field_schema: 'keyword' as const },
       { field_name: 'region_id', field_schema: 'integer' as const },
-      { field_name: 'brand', field_schema: 'keyword' as const },
-      { field_name: 'model', field_schema: 'keyword' as const },
-      { field_name: 'year', field_schema: 'integer' as const },
-      { field_name: 'condition', field_schema: 'keyword' as const },
     ];
 
     for (const index of indexes) {
@@ -136,7 +132,7 @@ export async function initializeQdrant(): Promise<void> {
 // PRODUCT INDEXING
 // ============================================
 
-export interface ProductPayload {
+interface ProductPayload {
   product_id: string;
   seller_id: string;
   title: string;
@@ -149,12 +145,6 @@ export interface ProductPayload {
   region_id?: number;
   status: string;
   created_at: string;
-  brand?: string;
-  model?: string;
-  year?: number;
-  condition?: string;
-  features?: string[];
-  semantic_summary?: string;
   [key: string]: unknown;
 }
 
@@ -190,17 +180,14 @@ export async function deleteProductFromIndex(productId: string): Promise<void> {
 // SEARCH
 // ============================================
 
-export interface SearchFilters {
+interface SearchFilters {
   country_code: string;
-  category_slug?: string;
   min_price?: number;
   max_price?: number;
   region_id?: number;
-  brand?: string;
-  model?: string;
 }
 
-export interface SearchResult {
+interface SearchResult {
   id: string;
   score: number;
   payload: ProductPayload;
@@ -223,8 +210,7 @@ export async function searchProducts(
   queryEmbedding: number[],
   querySparseVector: SparseVectorData,
   filters: SearchFilters,
-  limit: number = 10,
-  offset: number = 0
+  limit: number = 10
 ): Promise<SearchResult[]> {
   await ensureCollection();
 
@@ -233,10 +219,6 @@ export async function searchProducts(
     { key: 'country_code', match: { value: filters.country_code } },
     { key: 'status', match: { value: 'active' } },
   ];
-
-  if (filters.category_slug) {
-    must.push({ key: 'category_slug', match: { value: filters.category_slug } });
-  }
 
   if (filters.region_id) {
     must.push({ key: 'region_id', match: { value: filters.region_id } });
@@ -249,46 +231,60 @@ export async function searchProducts(
     must.push({ key: 'price', range });
   }
 
-  if (filters.brand) {
-    must.push({ key: 'brand', match: { value: filters.brand } });
-  }
-
-  if (filters.model) {
-    must.push({ key: 'model', match: { value: filters.model } });
-  }
-
   const filter = { must };
 
   // Hybrid search: prefetch from both dense and sparse, fuse with RRF
-  const response = await qdrant.query(PRODUCTS_COLLECTION, {
-    prefetch: [
-      {
-        query: queryEmbedding,
-        using: 'dense',
-        filter,
-        limit: 20,
-      },
-      {
-        query: {
-          indices: querySparseVector.indices,
-          values: querySparseVector.values,
-        },
-        using: 'bm25',
-        filter,
-        limit: 20,
-      },
-    ],
-    query: { fusion: 'rrf' },
-    limit,
-    offset,
-    with_payload: true,
-  });
+  const prefetch: any[] = [
+    {
+      query: queryEmbedding,
+      using: 'dense',
+      filter,
+      limit: 20,
+      score_threshold: 0.57, // Prevent hallucinated matches for non-existent items
+    },
+  ];
 
-  return response.points.map((r) => ({
-    id: r.id as string,
-    score: r.score,
-    payload: r.payload as unknown as ProductPayload,
-  }));
+  if (querySparseVector.indices.length > 0) {
+    prefetch.push({
+      query: {
+        indices: querySparseVector.indices,
+        values: querySparseVector.values,
+      },
+      using: 'bm25',
+      filter,
+      limit: 20,
+    });
+  }
+
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await qdrant.query(PRODUCTS_COLLECTION, {
+        prefetch: prefetch.length > 1 ? prefetch : undefined,
+        query: prefetch.length > 1 ? { fusion: 'rrf' } : queryEmbedding,
+        using: prefetch.length > 1 ? undefined : 'dense',
+        filter: prefetch.length > 1 ? undefined : filter,
+        limit,
+        with_payload: true,
+      });
+
+      return response.points.map((r) => ({
+        id: r.id as string,
+        score: r.score,
+        payload: r.payload as unknown as ProductPayload,
+      }));
+    } catch (e) {
+      lastError = e;
+      console.warn(`[Qdrant] Search attempt ${attempt} failed:`, e instanceof Error ? e.message : e);
+      if (attempt < 3) {
+        // Wait before retrying (exponential backoff)
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+
+  console.error('[Qdrant] All search retries failed.');
+  return []; // Return empty gracefully instead of crashing the tool loop
 }
 
 // ============================================

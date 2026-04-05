@@ -1,4 +1,4 @@
-USE MonetchatDB;
+USE PickPicDB;
 GO
 
 -- 0. Countries
@@ -13,10 +13,10 @@ GO
 DECLARE @AdminHash NVARCHAR(255) = '$2b$10$id.i5Z2DCxdlgq1NvWHWb.iKT4Yp3x.G0o/TJiaGvPxoOxkULMl36';
 DECLARE @SellerHash NVARCHAR(255) = '$2b$10$lKz0PzPRSi.hNprwoxIvyeLqHYc1gGj/f3ZF87Rpte5G/aqxMbOR6';
 
-IF NOT EXISTS (SELECT * FROM users WHERE email = 'admin@Monetchat.com')
+IF NOT EXISTS (SELECT * FROM users WHERE email = 'admin@pickpic.com')
 BEGIN
     INSERT INTO users (email, password_hash, full_name, is_verified)
-    VALUES ('admin@Monetchat.com', @AdminHash, 'Super Admin', 1);
+    VALUES ('admin@pickpic.com', @AdminHash, 'Super Admin', 1);
 END
 
 IF NOT EXISTS (SELECT * FROM users WHERE email = 'seller@example.com')
@@ -27,7 +27,7 @@ END
 GO
 
 -- 2. Roles Assignment
-DECLARE @AdminId UNIQUEIDENTIFIER = (SELECT id FROM users WHERE email = 'admin@Monetchat.com');
+DECLARE @AdminId UNIQUEIDENTIFIER = (SELECT id FROM users WHERE email = 'admin@pickpic.com');
 DECLARE @SellerId UNIQUEIDENTIFIER = (SELECT id FROM users WHERE email = 'seller@example.com');
 DECLARE @AdminRoleId INT = (SELECT id FROM roles WHERE name = 'admin');
 DECLARE @SellerRoleId INT = (SELECT id FROM roles WHERE name = 'seller');

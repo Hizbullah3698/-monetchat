@@ -3,9 +3,10 @@
 
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { PrismaClient } from '@prisma/client';
+import OpenAI from 'openai';
 
 const COLLECTION = 'products';
-const VECTOR_SIZE = 192; // Dimension for nomic-embed-text (as observed from current Ollama instance)
+const VECTOR_SIZE = 768; // nomic-embed-text
 const BATCH_SIZE = 20;
 
 const qdrant = new QdrantClient({
@@ -15,69 +16,61 @@ const qdrant = new QdrantClient({
 
 const prisma = new PrismaClient();
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL!;
-const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || "";
+const openai = new OpenAI({
+  baseURL: `${process.env.OLLAMA_BASE_URL}/v1`,
+  apiKey: process.env.OLLAMA_API_KEY || 'ollama',
+  defaultHeaders: {
+    'x-api-key': process.env.OLLAMA_API_KEY || '',
+  },
+});
+
+const EMBEDDING_MODEL = process.env.OLLAMA_EMBED_MODEL || process.env.OLLAMA_MODEL_EMBEDDING || 'nomic-embed-text';
 
 // --- BM25 Tokenizer (same as client.ts) ---
 
 function fnv1aHash(str: string): number {
-  let hash = 2166136261;
+  let hash = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
     hash ^= str.charCodeAt(i);
-    hash +=
-      (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    hash = (hash * 0x01000193) >>> 0;
   }
-  return hash >>> 0;
+  return hash;
 }
 
-function tokenize(text: string): string[] {
-  return text
+function textToSparseVector(text: string): { indices: number[]; values: number[] } {
+  const tokens = text
     .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length > 0);
-}
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((t) => t.length >= 2);
 
-function textToSparseVector(text: string) {
-  const tokens = tokenize(text);
-  const frequencies = new Map<number, number>();
+  if (tokens.length === 0) return { indices: [], values: [] };
 
+  const termFreq = new Map<string, number>();
   for (const token of tokens) {
-    const idx = fnv1aHash(token);
-    frequencies.set(idx, (frequencies.get(idx) || 0) + 1);
+    termFreq.set(token, (termFreq.get(token) || 0) + 1);
   }
 
-  const indices = Array.from(frequencies.keys());
-  const values = Array.from(frequencies.values());
-
+  const indices: number[] = [];
+  const values: number[] = [];
+  for (const [token, count] of termFreq) {
+    indices.push(fnv1aHash(token));
+    values.push(count);
+  }
   return { indices, values };
 }
 
 async function getEmbedding(text: string, retries = 3): Promise<number[]> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": OLLAMA_API_KEY,
-        },
-        body: JSON.stringify({
-          model: process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text",
-          prompt: text,
-        }),
+      const response = await openai.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: text,
       });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Embedding API error (${res.status}): ${errText}`);
-      }
-      const data = await res.json();
-      return data.embedding;
+      return response.data[0].embedding;
     } catch (err: unknown) {
       const error = err as { status?: number };
-      console.warn(`Embedding failed attempt ${attempt}:`, error?.status || err);
-      if (attempt < retries) {
-        console.log(`  Retrying in ${attempt * 2}s...`);
+      if (error?.status === 429 && attempt < retries) {
+        console.log(`  Rate limited, waiting ${attempt * 2}s...`);
         await new Promise((r) => setTimeout(r, attempt * 2000));
         continue;
       }
@@ -154,49 +147,18 @@ async function main() {
   let indexed = 0;
   let failed = 0;
 
-  const CONCURRENCY = 5;
-  for (let i = 0; i < products.length; i += CONCURRENCY) {
-    const batch = products.slice(i, i + CONCURRENCY);
-    const batchNum = Math.floor(i / CONCURRENCY) + 1;
-    const totalBatches = Math.ceil(products.length / CONCURRENCY);
+  for (let i = 0; i < products.length; i += BATCH_SIZE) {
+    const batch = products.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(products.length / BATCH_SIZE);
     console.log(`Processing batch ${batchNum}/${totalBatches}...`);
 
     const points = await Promise.all(
       batch.map(async (product) => {
         try {
-          console.log(`  - Processing: ${product.title.slice(0, 30)}...`);
-          // --- RICH METADATA EXTRACTION ---
-          const metaPrompt = `Extract searchable keywords for this product: Brand, Model, Year, Category, Features.
-Title: ${product.title}
-Desc: ${product.description || 'N/A'}
-Keywords:`;
-
-          const chatRes = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": OLLAMA_API_KEY,
-            },
-            body: JSON.stringify({
-              model: process.env.OLLAMA_CHAT_MODEL || 'qwen2.5:14b-instruct-q8_0',
-              messages: [{ role: 'user', content: metaPrompt }],
-              stream: false,
-              options: { temperature: 0.1 },
-            }),
-          });
-          if (!chatRes.ok) {
-            const errText = await chatRes.text();
-            throw new Error(`Chat API error (${chatRes.status}): ${errText}`);
-          }
-          const metaData = await chatRes.json();
-          const keywords = metaData.message?.content || '';
-          const meta = { brand: '', model: '', year: null, features: [], semantic_summary: keywords };
-
-          // --- UNIFIED SEARCHABLE TEXT ---
-          const unifiedText = `${product.title} ${product.titleAr || ''} ${keywords} ${product.category?.slug || ''} ${product.condition} ${product.price} ${product.currency} ${product.description || ''} ${product.descriptionAr || ''}`.trim();
-
-          const embedding = await getEmbedding(unifiedText);
-          const sparseVector = textToSparseVector(unifiedText);
+          const searchText = `${product.title} ${product.description || ''}`.trim();
+          const embedding = await getEmbedding(searchText);
+          const sparseVector = textToSparseVector(searchText);
 
           return {
             id: product.id,
@@ -217,13 +179,6 @@ Keywords:`;
               region_id: product.regionId || undefined,
               status: product.status,
               created_at: product.createdAt.toISOString(),
-              // ENRICHED METADATA
-              brand: meta.brand || undefined,
-              model: meta.model || undefined,
-              year: meta.year || undefined,
-              condition: product.condition,
-              features: meta.features || [],
-              semantic_summary: meta.semantic_summary || undefined,
             },
           };
         } catch (err) {
@@ -234,7 +189,9 @@ Keywords:`;
       })
     );
 
-    const validPoints = points.filter((p): p is NonNullable<typeof p> => p !== null);
+    const validPoints = points.filter(
+      (p): p is NonNullable<typeof p> => p !== null
+    );
 
     if (validPoints.length > 0) {
       await qdrant.upsert(COLLECTION, {
@@ -243,7 +200,13 @@ Keywords:`;
       });
       indexed += validPoints.length;
     }
-    console.log(`  Indexed ${validPoints.length}/${batch.length}. Total: ${indexed}`);
+
+    console.log(`  Indexed ${validPoints.length}/${batch.length} products.`);
+
+    // Rate limit delay between batches
+    if (i + BATCH_SIZE < products.length) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
   }
 
   // Step 5: Update qdrantPointId in database
@@ -252,7 +215,7 @@ Keywords:`;
     await prisma.product.update({
       where: { id: product.id },
       data: { qdrantPointId: product.id },
-    }).catch(() => {});
+    }).catch(() => { });
   }
 
   console.log(`\n=== Migration Complete ===`);

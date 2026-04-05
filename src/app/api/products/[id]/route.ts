@@ -1,59 +1,25 @@
-import { NextRequest } from 'next/server';
+// Single Product API
+// GET /api/products/[id] - Get product details
+// PUT /api/products/[id] - Update product (owner only)
+// DELETE /api/products/[id] - Delete product (owner only)
+
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/jwt';
-import { createApiHandler } from '@/lib/api/handler';
-import { NotFoundError, ForbiddenError, ValidationError } from '@/lib/api/errors/AppError';
-import { enqueueIndexProduct, enqueueRemoveProduct } from '@/jobs/indexing.job';
-import { CacheService } from '@/lib/cache';
-import { ROLE_ADMIN, ROLE_SUPER_ADMIN } from '@/lib/auth/roles';
-import { buildPublicProductWhere } from '@/lib/marketplace/visibility';
-import { AuditLogService } from '@/lib/services/audit-service';
+import { deleteProductFromIndex, indexProduct, textToSparseVector } from '@/lib/qdrant/client';
+import { getTextEmbedding } from '@/lib/ai/openai';
 
-const PRODUCT_DETAIL_CACHE_TTL = 3600; // 1 hour
-const paramsSchema = z.object({
-  id: z.string().uuid(),
-});
+// GET: Get product details
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
 
-/**
- * @openapi
- * /api/products/{id}:
- *   get:
- *     summary: Get product details
- *     tags: [Products]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Product details
- *       404:
- *         description: Product not found
- *       500:
- *         description: Failed to fetch product
- */
-export const GET = createApiHandler(async (request, { params }) => {
-    const { id } = paramsSchema.parse(params ?? {});
-    const authUser = await getCurrentUser(request).catch(() => null);
-    const canViewHidden =
-      authUser?.role === ROLE_ADMIN || authUser?.role === ROLE_SUPER_ADMIN;
-
-    const cacheKey = `products:detail:${id}`;
-    const cachedProduct = !authUser ? await CacheService.get(cacheKey) : null;
-    if (cachedProduct) {
-      // Fire and forget view increment in background
-      prisma.product.update({
-        where: { id },
-        data: { viewCount: { increment: 1 } },
-      }).catch(() => {});
-      return cachedProduct;
-    }
-
-    const product = await prisma.product.findFirst({
-      where: canViewHidden ? { id, deletedAt: null } : buildPublicProductWhere({ id }),
+    const product = await prisma.product.findUnique({
+      where: { id },
       include: {
         images: {
           orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
@@ -85,21 +51,20 @@ export const GET = createApiHandler(async (request, { params }) => {
       },
     });
 
-    if (!product) throw new NotFoundError('Product not found');
-
-    const isOwner = authUser?.userId === product.sellerId;
-    const isPubliclyVisible = product.status === 'active' && !product.deletedAt;
-    if (!isPubliclyVisible && !isOwner && !canViewHidden) {
-      throw new NotFoundError('Product not found');
+    if (!product) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      );
     }
 
     // Increment view count (fire and forget)
     prisma.product.update({
       where: { id },
       data: { viewCount: { increment: 1 } },
-    }).catch(() => {});
+    }).catch(() => { });
 
-    const responseData = {
+    return NextResponse.json({
       product: {
         id: product.id,
         title: product.title,
@@ -136,14 +101,15 @@ export const GET = createApiHandler(async (request, { params }) => {
         createdAt: product.createdAt,
         expiresAt: product.expiresAt,
       },
-    };
-
-    if (!authUser && isPubliclyVisible) {
-      await CacheService.set(cacheKey, responseData, PRODUCT_DETAIL_CACHE_TTL);
-    }
-
-    return responseData;
-});
+    });
+  } catch (error) {
+    console.error('Product GET error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch product' },
+      { status: 500 }
+    );
+  }
+}
 
 // Validation schema for updating product
 const updateProductSchema = z.object({
@@ -154,94 +120,43 @@ const updateProductSchema = z.object({
   price: z.number().positive().optional(),
   isNegotiable: z.boolean().optional(),
   condition: z.enum(['new', 'like_new', 'good', 'fair', 'poor']).optional(),
-  status: z.enum(['draft', 'pending', 'active', 'sold', 'expired', 'rejected']).optional(),
+  status: z.enum(['active', 'sold']).optional(),
   regionId: z.number().optional(),
 });
 
-const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  draft: ['pending', 'active', 'draft'],
-  pending: ['active', 'draft', 'rejected'],
-  active: ['sold', 'expired', 'pending', 'active'],
-  sold: ['sold'],
-  expired: ['expired', 'pending'],
-  rejected: ['pending', 'draft'],
-};
+// PUT: Update product
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-/**
- * @openapi
- * /api/products/{id}:
- *   put:
- *     summary: Update product (owner only)
- *     tags: [Products]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               title:
- *                 type: string
- *               titleAr:
- *                 type: string
- *               description:
- *                 type: string
- *               descriptionAr:
- *                 type: string
- *               price:
- *                 type: number
- *               isNegotiable:
- *                 type: boolean
- *               condition:
- *                 type: string
- *               status:
- *                 type: string
- *               regionId:
- *                 type: integer
- *     responses:
- *       200:
- *         description: Product updated successfully
- *       400:
- *         description: Validation failed
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: You can only edit your own products
- *       404:
- *         description: Product not found
- */
-export const PUT = createApiHandler(async (request, { params, body, user }) => {
-    const { id } = paramsSchema.parse(params ?? {});
+    const { id } = await context.params;
+    const body = await request.json();
     const validatedData = updateProductSchema.parse(body);
 
     // Check if product exists and user owns it
     const product = await prisma.product.findUnique({
       where: { id },
-      select: { sellerId: true, status: true, deletedAt: true },
+      select: { sellerId: true },
     });
 
-    if (!product || product.deletedAt) {
-      throw new NotFoundError('Product not found');
+    if (!product) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      );
     }
 
-    if (product.sellerId !== user!.userId) {
-      throw new ForbiddenError('You can only edit your own products');
-    }
-
-    // Enforce allowed status transitions for sellers
-    if (validatedData.status) {
-      const allowed = ALLOWED_TRANSITIONS[product.status] || [];
-      if (!allowed.includes(validatedData.status)) {
-        throw new ValidationError(`Invalid status transition from ${product.status} to ${validatedData.status}`);
-      }
+    if (product.sellerId !== user.userId) {
+      return NextResponse.json(
+        { error: 'You can only edit your own products' },
+        { status: 403 }
+      );
     }
 
     // Update product
@@ -253,26 +168,32 @@ export const PUT = createApiHandler(async (request, { params, body, user }) => {
       },
     });
 
-    // Reindex in Qdrant async via BullMQ (don't block response)
-    enqueueIndexProduct(updatedProduct.id).catch((err) => {
-      console.error('Failed to enqueue product indexing job:', err);
-    });
+    // Reindex in Qdrant async (don't block response)
+    (async () => {
+      try {
+        const searchText = `${updatedProduct.title} ${updatedProduct.description || ''}`.trim();
+        const embedding = await getTextEmbedding(searchText);
+        const sparseVector = textToSparseVector(searchText);
+        await indexProduct(updatedProduct.id, embedding, sparseVector, {
+          product_id: updatedProduct.id,
+          seller_id: updatedProduct.sellerId,
+          title: updatedProduct.title,
+          title_ar: updatedProduct.titleAr || undefined,
+          description: updatedProduct.description || undefined,
+          price: Number(updatedProduct.price),
+          currency: updatedProduct.currency,
+          category_slug: updatedProduct.category?.slug || 'other',
+          country_code: updatedProduct.countryCode,
+          region_id: updatedProduct.regionId || undefined,
+          status: updatedProduct.status,
+          created_at: updatedProduct.createdAt.toISOString(),
+        });
+      } catch (err) {
+        console.error('Failed to reindex product in Qdrant:', err);
+      }
+    })();
 
-    // Invalidate caches
-    await CacheService.del(`products:detail:${id}`);
-    await CacheService.invalidatePattern('products:list:*');
-
-    await AuditLogService.logAction({
-      userId: user!.userId,
-      action: 'UPDATE',
-      entityName: 'Product',
-      entityId: id,
-      changes: validatedData,
-      ipAddress: request.headers.get('x-forwarded-for') || undefined,
-      userAgent: request.headers.get('user-agent') || undefined,
-    }).catch(() => {});
-
-    return {
+    return NextResponse.json({
       product: {
         id: updatedProduct.id,
         title: updatedProduct.title,
@@ -280,79 +201,77 @@ export const PUT = createApiHandler(async (request, { params, body, user }) => {
         status: updatedProduct.status,
         updatedAt: updatedProduct.updatedAt,
       },
-    };
-}, { requireAuth: true, bodySchema: updateProductSchema });
+    });
+  } catch (error) {
+    console.error('Product PUT error:', error);
 
-/**
- * @openapi
- * /api/products/{id}:
- *   delete:
- *     summary: Delete product (owner only)
- *     tags: [Products]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Product deleted successfully
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: You can only delete your own products
- *       404:
- *         description: Product not found
- */
-export const DELETE = createApiHandler(async (request, { params, user }) => {
-    const { id } = paramsSchema.parse(params ?? {});
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to update product' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE: Delete product
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await context.params;
 
     // Check if product exists and user owns it
     const product = await prisma.product.findUnique({
       where: { id },
-      select: { sellerId: true, qdrantPointId: true, status: true, deletedAt: true },
+      select: { sellerId: true, qdrantPointId: true },
     });
 
-    if (!product || product.deletedAt) {
-      throw new NotFoundError('Product not found');
+    if (!product) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      );
     }
 
-    if (product.sellerId !== user!.userId) {
-      throw new ForbiddenError('You can only delete your own products');
+    if (product.sellerId !== user.userId) {
+      return NextResponse.json(
+        { error: 'You can only delete your own products' },
+        { status: 403 }
+      );
     }
-
-    // Soft delete / deactivate
-    await prisma.product.update({
-      where: { id },
-      data: {
-        status: 'expired',
-        deletedAt: new Date(),
-      },
-    });
 
     // Delete from Qdrant if indexed
     if (product.qdrantPointId) {
-      enqueueRemoveProduct(product.qdrantPointId).catch(() => {});
+      deleteProductFromIndex(product.qdrantPointId).catch((err) => {
+        console.error('Failed to delete from Qdrant:', err);
+      });
     }
 
-    // Invalidate caches
-    await CacheService.del(`products:detail:${id}`);
-    await CacheService.invalidatePattern('products:list:*');
+    // Delete product (cascades to images)
+    await prisma.product.delete({
+      where: { id },
+    });
 
-    await AuditLogService.logAction({
-      userId: user!.userId,
-      action: 'DELETE',
-      entityName: 'Product',
-      entityId: id,
-      changes: { previousStatus: product.status, newStatus: 'expired' },
-      ipAddress: request.headers.get('x-forwarded-for') || undefined,
-      userAgent: request.headers.get('user-agent') || undefined,
-    }).catch(() => {});
-
-    return {
-      message: 'Product deactivated successfully',
-    };
-}, { requireAuth: true });
+    return NextResponse.json({
+      message: 'Product deleted successfully',
+    });
+  } catch (error) {
+    console.error('Product DELETE error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete product' },
+      { status: 500 }
+    );
+  }
+}

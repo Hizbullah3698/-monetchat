@@ -9,7 +9,7 @@ import { AppShell } from './app-shell';
 const inter = Inter({ subsets: ['latin'], variable: '--font-body' });
 
 export const metadata: Metadata = {
-  title: 'Monetchat - AI Marketplace',
+  title: 'PickPic - AI Marketplace',
   description: 'Chat with AI to find and buy products. Upload images, use voice, or just type what you need.',
 };
 

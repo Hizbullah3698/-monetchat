@@ -1,4 +1,4 @@
-# Monetchat - Project Overview
+# PickPic - Project Overview
 
 ## AI-Powered Marketplace for Kuwait
 
@@ -10,7 +10,7 @@
 
 ## What We're Building
 
-Monetchat is a **modern marketplace app** that works like ChatGPT - but for buying and selling. Instead of browsing through categories and filters like traditional apps (e.g., "Kuwait For Sale"), users simply **tell the AI what they want** using text, voice, or images.
+PickPic is a **modern marketplace app** that works like ChatGPT - but for buying and selling. Instead of browsing through categories and filters like traditional apps (e.g., "Kuwait For Sale"), users simply **tell the AI what they want** using text, voice, or images.
 
 ### The Experience
 
@@ -150,7 +150,7 @@ Monetchat is a **modern marketplace app** that works like ChatGPT - but for buyi
 
 ## What Makes This Different from "Kuwait For Sale"
 
-| Feature       | Kuwait For Sale      | Monetchat                  |
+| Feature       | Kuwait For Sale      | PickPic                  |
 | ------------- | -------------------- | ------------------------ |
 | Search Method | Categories + Filters | **AI Chat**              |
 | Input         | Text only            | **Text + Voice + Image** |
@@ -174,7 +174,7 @@ Monetchat is a **modern marketplace app** that works like ChatGPT - but for buyi
 6. Waits for response
 ```
 
-### Monetchat (AI-Powered)
+### PickPic (AI-Powered)
 
 ```
 1. User opens app
@@ -290,7 +290,7 @@ _This document will be updated as the project progresses._
 ├─────────────────────────────────────────┤
 │                                         │
 │                                         │
-│         Welcome to Monetchat! 👋          │
+│         Welcome to PickPic! 👋          │
 │                                         │
 │    Tell me what you're looking for      │
 │                                         │

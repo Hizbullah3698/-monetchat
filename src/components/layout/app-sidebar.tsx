@@ -110,7 +110,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="p-3 space-y-3">
         <div className="flex items-center gap-2 px-2">
           <Camera className="h-5 w-5 text-primary" />
-          <span className="font-bold text-lg">Monetchat</span>
+          <span className="font-bold text-lg">PickPic</span>
         </div>
         <Button
           onClick={handleStartNew}

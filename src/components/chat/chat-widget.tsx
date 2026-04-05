@@ -16,7 +16,7 @@ export function ChatWidget() {
           <div className="p-3 border-b bg-primary text-primary-foreground flex justify-between items-center rounded-t-lg">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5" />
-              <span className="font-semibold">Monetchat AI Search</span>
+              <span className="font-semibold">PickPic AI Search</span>
             </div>
             <Button
               variant="ghost"

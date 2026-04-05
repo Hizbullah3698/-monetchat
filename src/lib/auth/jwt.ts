@@ -3,23 +3,21 @@
 
 import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { cookies } from 'next/headers';
-import { AuthenticationError, ForbiddenError } from '@/lib/api/errors/AppError';
-import { RoleName, ROLE_SUPER_ADMIN, isRoleAtLeast } from '@/lib/auth/roles';
 
 const jwtSecretValue = process.env.JWT_SECRET;
 if (!jwtSecretValue || jwtSecretValue.length < 32) {
   throw new Error('JWT_SECRET environment variable must be set and at least 32 characters long');
 }
 const JWT_SECRET = new TextEncoder().encode(jwtSecretValue);
-const JWT_ISSUER = 'Monetchat';
-const JWT_AUDIENCE = 'Monetchat-users';
+const JWT_ISSUER = 'pickpic';
+const JWT_AUDIENCE = 'pickpic-users';
 const ACCESS_TOKEN_EXPIRY = '24h';
 const COOKIE_NAME = 'auth_token';
 
 export interface TokenPayload extends JWTPayload {
   userId: string;
   email: string;
-  role: RoleName;
+  role: 'buyer' | 'seller';
 }
 
 // Generate JWT token
@@ -64,61 +62,33 @@ export async function clearAuthCookie(): Promise<void> {
   cookieStore.delete(COOKIE_NAME);
 }
 
-// Get token from cookie or Authorization header
-export async function getToken(req?: Request): Promise<string | null> {
-  // 1. Try cookie
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(COOKIE_NAME)?.value;
-    if (token) return token;
-  } catch {
-    // cookies() might fail outside of Next.js request context
-  }
-
-  // 2. Try Authorization header
-  if (req) {
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      return authHeader.substring(7);
-    }
-  }
-
-  return null;
+// Get token from cookie
+export async function getTokenFromCookie(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(COOKIE_NAME)?.value || null;
 }
 
 // Get current user from request
-export async function getCurrentUser(req?: Request): Promise<TokenPayload | null> {
-  const token = await getToken(req);
+export async function getCurrentUser(): Promise<TokenPayload | null> {
+  const token = await getTokenFromCookie();
   if (!token) return null;
   return verifyToken(token);
 }
 
 // Middleware helper: require authentication
-export async function requireAuth(req?: Request): Promise<TokenPayload> {
-  const user = await getCurrentUser(req);
+export async function requireAuth(): Promise<TokenPayload> {
+  const user = await getCurrentUser();
   if (!user) {
-    throw new AuthenticationError();
+    throw new Error('Unauthorized');
   }
   return user;
 }
 
-export async function requireRole(required: RoleName | RoleName[], req?: Request): Promise<TokenPayload> {
-  const user = await requireAuth(req);
-  const roles = Array.isArray(required) ? required : [required];
-
-  if (user.role === ROLE_SUPER_ADMIN) {
-    return user;
+// Middleware helper: require seller role
+export async function requireSeller(): Promise<TokenPayload> {
+  const user = await requireAuth();
+  if (user.role !== 'seller') {
+    throw new Error('Forbidden: Seller access required');
   }
-
-  const allowed = roles.some((role) => user.role === role || isRoleAtLeast(user.role, role));
-  if (!allowed) {
-    throw new ForbiddenError('Insufficient permissions');
-  }
-
   return user;
-}
-
-// Middleware helper: require seller role (seller or higher)
-export async function requireSeller(req?: Request): Promise<TokenPayload> {
-  return requireRole('seller', req);
 }

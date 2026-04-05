@@ -54,12 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 body: JSON.stringify({ email, password }),
             });
 
-            const data = await res.json();
-
             if (!res.ok) {
-                throw new Error(data.error || data.message || 'Login failed');
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Login failed');
             }
 
+            const data = await res.json();
             setUser(data.user);
             router.push('/');
         } catch (error) {
@@ -73,17 +73,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, name: name || email.split('@')[0], phone, countryCode: 'KW' }),
+                body: JSON.stringify({ email, password, name, phone }),
             });
 
-            const data = await res.json();
-
             if (!res.ok) {
-                throw new Error(data.error || data.message || 'Registration failed');
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Registration failed');
             }
 
-            // Registration successful — redirect to login (email not yet verified)
-            router.push('/login');
+            const data = await res.json();
+            setUser(data.user); // Auto login
+            router.push('/');
 
         } catch (error) {
             console.error(error);

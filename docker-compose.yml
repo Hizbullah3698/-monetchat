@@ -3,105 +3,44 @@ version: "3.9"
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: Monetchat_postgres
+    container_name: monetchat-postgres-local
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-Monetchat}
-      POSTGRES_USER: ${POSTGRES_USER:-Monetchatuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Monetchatpassword}
+      POSTGRES_DB: monetchat
+      POSTGRES_USER: monet
+      POSTGRES_PASSWORD: monetpass
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_local:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-Monetchatuser} -d ${POSTGRES_DB:-Monetchat}"]
+      test: [ "CMD-SHELL", "pg_isready -U monet -d monetchat" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: Monetchat_qdrant
+    container_name: monetchat-qdrant-local
     restart: unless-stopped
     ports:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - qdrant_data:/qdrant/storage
+      - qdrant_data_local:/qdrant/storage
 
   redis:
     image: redis:7-alpine
-    container_name: Monetchat_redis
+    container_name: monetchat-redis-local
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: Monetchat_app
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-      redis:
-        condition: service_started
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-Monetchatuser}:${POSTGRES_PASSWORD:-Monetchatpassword}@postgres:5432/${POSTGRES_DB:-Monetchat}
-      QDRANT_URL: http://qdrant:6333
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      AI_BASE_URL: ${AI_BASE_URL}
-      AI_API_KEY: ${AI_API_KEY}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
-      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL}
-      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
-      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL}
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    container_name: Monetchat_worker
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-      redis:
-        condition: service_started
-    ports:
-      - "4501:4501"
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-Monetchatuser}:${POSTGRES_PASSWORD:-Monetchatpassword}@postgres:5432/${POSTGRES_DB:-Monetchat}
-      QDRANT_URL: http://qdrant:6333
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      AI_BASE_URL: ${AI_BASE_URL}
-      AI_API_KEY: ${AI_API_KEY}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
-      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL}
-      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
-      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL}
-
+      - redis_data_local:/data
 
 volumes:
-  postgres_data:
-  qdrant_data:
-  redis_data:
+  postgres_data_local:
+  qdrant_data_local:
+  redis_data_local:
+
+

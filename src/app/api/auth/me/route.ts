@@ -1,53 +1,11 @@
-/**
- * @openapi
- * /api/auth/me:
- *   get:
- *     summary: Get current authenticated user profile
- *     tags: [Auth]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       200:
- *         description: Current user profile
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 user:
- *                   type: object
- *       401:
- *         description: Unauthorized
- *   patch:
- *     summary: Update current user profile
- *     tags: [Auth]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               phone:
- *                 type: string
- *     responses:
- *       200:
- *         description: User profile updated
- *       400:
- *         description: Validation failed
- *       401:
- *         description: Unauthorized
- */
+// Current User API
+// GET /api/auth/me - Get current user profile
+// PATCH /api/auth/me - Update current user profile
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/jwt';
 import { prisma } from '@/lib/db/prisma';
 import { z } from 'zod';
-import { profileUpdateSchema } from '@/lib/validation/profile';
 
 export async function GET() {
   try {
@@ -61,15 +19,6 @@ export async function GET() {
     const user = await prisma.user.findUnique({
       where: { id: tokenPayload.userId },
       include: {
-        role: {
-          include: {
-            permissions: {
-              include: {
-                permission: true,
-              },
-            },
-          },
-        },
         seller: true,
         country: {
           select: {
@@ -92,8 +41,7 @@ export async function GET() {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role.name,
-        permissions: user.role.permissions.map((rp) => rp.permission.name),
+        role: user.role,
         countryCode: user.countryCode,
         preferredLanguage: user.preferredLanguage,
         avatarUrl: user.avatarUrl,
@@ -120,6 +68,11 @@ export async function GET() {
 }
 
 // PATCH: Update current user profile
+const updateProfileSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  phone: z.string().max(20).optional(),
+});
+
 export async function PATCH(request: NextRequest) {
   try {
     const tokenPayload = await getCurrentUser();
@@ -128,27 +81,19 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const data = profileUpdateSchema.parse(body);
+    const data = updateProfileSchema.parse(body);
 
     const updated = await prisma.user.update({
       where: { id: tokenPayload.userId },
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.phone !== undefined && { phone: data.phone }),
-        ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
-        ...(data.countryCode !== undefined && { countryCode: data.countryCode }),
-        ...(data.regionId !== undefined && { regionId: data.regionId }),
-        ...(data.preferredLanguage !== undefined && { preferredLanguage: data.preferredLanguage }),
       },
       select: {
         id: true,
         email: true,
         name: true,
         phone: true,
-        avatarUrl: true,
-        countryCode: true,
-        regionId: true,
-        preferredLanguage: true,
       },
     });
 

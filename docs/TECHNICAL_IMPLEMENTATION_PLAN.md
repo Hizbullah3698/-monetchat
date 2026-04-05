@@ -1,4 +1,4 @@
-# Technical Implementation Plan - Monetchat V1
+# Technical Implementation Plan - PickPic V1
 ## AI-Powered Chat-to-Buy/Sell Marketplace
 
 **Version:** 1.3
@@ -141,12 +141,12 @@ This approach ensures text queries like "Mercedes GLE" and image uploads of a Me
 psql -U postgres
 
 # Create database and user
-CREATE DATABASE Monetchat;
-CREATE USER Monetchat_user WITH ENCRYPTED PASSWORD 'your_secure_password';
-GRANT ALL PRIVILEGES ON DATABASE Monetchat TO Monetchat_user;
+CREATE DATABASE pickpic;
+CREATE USER pickpic_user WITH ENCRYPTED PASSWORD 'your_secure_password';
+GRANT ALL PRIVILEGES ON DATABASE pickpic TO pickpic_user;
 
 # Enable required extensions
-\c Monetchat
+\c pickpic
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For text search
 ```
@@ -245,10 +245,10 @@ nssm start Qdrant
 AWS_REGION=me-south-1  // Bahrain (closest to Kuwait)
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
-S3_BUCKET_NAME=Monetchat-media
+S3_BUCKET_NAME=pickpic-media
 
 // Bucket structure
-Monetchat-media/
+pickpic-media/
 ├── products/
 │   └── {product_id}/
 │       ├── primary.jpg
@@ -271,7 +271,7 @@ Monetchat-media/
       "Effect": "Allow",
       "Principal": "*",
       "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::Monetchat-media/products/*"
+      "Resource": "arn:aws:s3:::pickpic-media/products/*"
     }
   ]
 }
@@ -296,15 +296,15 @@ Monetchat-media/
 
 # Application
 NODE_ENV=production
-NEXT_PUBLIC_APP_URL=https://Monetchat.com
+NEXT_PUBLIC_APP_URL=https://pickpic.com
 PORT=3000
 
 # PostgreSQL
-DATABASE_URL=postgresql://Monetchat_user:password@localhost:5432/Monetchat
+DATABASE_URL=postgresql://pickpic_user:password@localhost:5432/pickpic
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=Monetchat
-DB_USER=Monetchat_user
+DB_NAME=pickpic
+DB_USER=pickpic_user
 DB_PASSWORD=your_secure_password
 
 # Qdrant
@@ -315,8 +315,8 @@ QDRANT_API_KEY=optional_api_key
 AWS_REGION=me-south-1
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
-S3_BUCKET_NAME=Monetchat-media
-S3_CDN_URL=https://Monetchat-media.s3.me-south-1.amazonaws.com
+S3_BUCKET_NAME=pickpic-media
+S3_CDN_URL=https://pickpic-media.s3.me-south-1.amazonaws.com
 
 # OpenAI
 OPENAI_API_KEY=sk-your-openai-key
@@ -1223,7 +1223,7 @@ export async function chatWithProducts(
   search_query?: string;
   filters?: Record<string, any>;
 }> {
-  const systemPrompt = `You are a helpful shopping assistant for Monetchat marketplace in ${context.country_code === 'KW' ? 'Kuwait' : 'Saudi Arabia'}.
+  const systemPrompt = `You are a helpful shopping assistant for PickPic marketplace in ${context.country_code === 'KW' ? 'Kuwait' : 'Saudi Arabia'}.
 
 Your role:
 1. Understand what the user wants to buy
@@ -1997,8 +1997,8 @@ pm2-startup install
 
 # 3. Clone and build application
 cd C:\inetpub\wwwroot
-git clone <repo-url> Monetchat
-cd Monetchat
+git clone <repo-url> pickpic
+cd pickpic
 npm install
 npm run build
 
@@ -2011,7 +2011,7 @@ pm2 save
 
 # 6. Verify
 pm2 status
-pm2 logs Monetchat
+pm2 logs pickpic
 ```
 
 ### 10.2 PM2 Configuration
@@ -2021,10 +2021,10 @@ pm2 logs Monetchat
 module.exports = {
   apps: [
     {
-      name: 'Monetchat',
+      name: 'pickpic',
       script: 'node_modules/next/dist/bin/next',
       args: 'start',
-      cwd: 'C:\\inetpub\\wwwroot\\Monetchat',
+      cwd: 'C:\\inetpub\\wwwroot\\pickpic',
       instances: 1,
       exec_mode: 'fork',
       env_production: {
@@ -2032,8 +2032,8 @@ module.exports = {
         PORT: 3000,
       },
       max_memory_restart: '1G',
-      error_file: 'C:\\inetpub\\wwwroot\\Monetchat\\logs\\error.log',
-      out_file: 'C:\\inetpub\\wwwroot\\Monetchat\\logs\\out.log',
+      error_file: 'C:\\inetpub\\wwwroot\\pickpic\\logs\\error.log',
+      out_file: 'C:\\inetpub\\wwwroot\\pickpic\\logs\\out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
   ],
@@ -2061,16 +2061,16 @@ http {
 
     server {
         listen 80;
-        server_name Monetchat.com www.Monetchat.com;
+        server_name pickpic.com www.pickpic.com;
         return 301 https://$server_name$request_uri;
     }
 
     server {
         listen 443 ssl http2;
-        server_name Monetchat.com www.Monetchat.com;
+        server_name pickpic.com www.pickpic.com;
 
-        ssl_certificate      C:/nginx/ssl/Monetchat.crt;
-        ssl_certificate_key  C:/nginx/ssl/Monetchat.key;
+        ssl_certificate      C:/nginx/ssl/pickpic.crt;
+        ssl_certificate_key  C:/nginx/ssl/pickpic.key;
 
         location / {
             proxy_pass http://nextjs;
@@ -2147,7 +2147,7 @@ http {
 
 ```json
 {
-  "name": "Monetchat",
+  "name": "pickpic",
   "version": "1.0.0",
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
@@ -2235,11 +2235,11 @@ PORT=3000
 # ============================================
 # POSTGRESQL
 # ============================================
-DATABASE_URL=postgresql://Monetchat_user:password@localhost:5432/Monetchat
+DATABASE_URL=postgresql://pickpic_user:password@localhost:5432/pickpic
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=Monetchat
-DB_USER=Monetchat_user
+DB_NAME=pickpic
+DB_USER=pickpic_user
 DB_PASSWORD=your_secure_password
 
 # ============================================
@@ -2254,8 +2254,8 @@ QDRANT_API_KEY=
 AWS_REGION=me-south-1
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
-S3_BUCKET_NAME=Monetchat-media
-S3_CDN_URL=https://Monetchat-media.s3.me-south-1.amazonaws.com
+S3_BUCKET_NAME=pickpic-media
+S3_CDN_URL=https://pickpic-media.s3.me-south-1.amazonaws.com
 
 # ============================================
 # OPENAI (All AI features)

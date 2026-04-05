@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Daily Backup Script for Monetchat (MSSQL + Files)
+    Daily Backup Script for PickPic (MSSQL + Files)
     Runs via Windows Task Scheduler.
 
 .DESCRIPTION
-    1. Backs up MSSQL Database 'MonetchatDB' to C:\Backups\MonetchatDB
+    1. Backs up MSSQL Database 'PickPicDB' to C:\Backups\PickPicDB
     2. Backups .env file to C:\Backups\Config
     3. Mirrors user uploads to C:\Backups\Uploads
     4. Deletes backups older than 30 days.
@@ -13,9 +13,9 @@
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$DbName = "MonetchatDB"
+$DbName = "PickPicDB"
 $BackupRoot = "C:\Backups"
-$DbBackupDir = "$BackupRoot\MonetchatDB"
+$DbBackupDir = "$BackupRoot\PickPicDB"
 $ConfigBackupDir = "$BackupRoot\Config"
 $UploadsBackupDir = "$BackupRoot\Uploads"
 $AppRoot = "C:\inetpub\wwwroot\studioxo"

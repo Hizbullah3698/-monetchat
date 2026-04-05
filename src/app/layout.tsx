@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"], variable: '--font-body' });
 
 export const metadata: Metadata = {
-    title: "Monetchat",
+    title: "PickPic",
     description: "AI-Powered Marketplace",
 };
 

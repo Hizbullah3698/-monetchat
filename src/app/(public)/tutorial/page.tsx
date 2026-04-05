@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-    title: 'How to Use Monetchat | Tutorial',
-    description: 'A step-by-step guide to buying and selling on Monetchat using AI visual search.',
+    title: 'How to Use PickPic | Tutorial',
+    description: 'A step-by-step guide to buying and selling on PickPic using AI visual search.',
 };
 
 const SECTIONS = [
@@ -31,7 +31,7 @@ export default function TutorialPage() {
     return (
         <div className="container mx-auto px-4 pb-24">
             <TutorialHero
-                title="How to Use Monetchat"
+                title="How to Use PickPic"
                 subtitle="A quick guide to buying and selling with AI-powered visual search"
                 ctaText="Start Exploring"
                 ctaHref="/search"
@@ -139,7 +139,7 @@ export default function TutorialPage() {
                         <TutorialStep
                             stepNumber={2}
                             title="AI Smart Listing"
-                            description="Monetchat AI analyzes your photos and automatically generates a title, description, and attributes for you."
+                            description="PickPic AI analyzes your photos and automatically generates a title, description, and attributes for you."
                             icon={Sparkles}
                         />
                         <TutorialStep
@@ -221,7 +221,7 @@ export default function TutorialPage() {
                         <div className="space-y-4 mb-6">
                             <details className="group">
                                 <summary className="font-medium cursor-pointer list-none flex items-center justify-between">
-                                    Is Monetchat free to use?
+                                    Is PickPic free to use?
                                     <span className="transition group-open:rotate-180">▼</span>
                                 </summary>
                                 <p className="text-muted-foreground mt-2 text-sm">Yes! Browsing and basic selling are completely free. We also offer premium plans for power users.</p>
@@ -250,7 +250,7 @@ export default function TutorialPage() {
 
                     {/* Final CTA */}
                     <section className="text-center bg-primary text-primary-foreground rounded-2xl p-12 space-y-6">
-                        <h2 className="text-3xl font-bold">Ready to try Monetchat?</h2>
+                        <h2 className="text-3xl font-bold">Ready to try PickPic?</h2>
                         <p className="text-primary-foreground/90 max-w-md mx-auto text-lg">
                             Join thousands of users buying and selling with the power of AI.
                         </p>
