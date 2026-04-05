@@ -1421,9 +1421,23 @@ export function ChatInterface({
     e.target.value = "";
   };
 
-  const handleSuggestion = (text: string) => {
-    sendMessage(text);
-  };
+  const handleBuyStart = useCallback(() => {
+    if (messages.length > 0) return;
+    
+    const welcomeMsg: ChatMessage = {
+      id: "buy-welcome-" + Date.now(),
+      role: "assistant",
+      text: t("chat.buyWelcome")
+    };
+    
+    setMessages([welcomeMsg]);
+    setShowSellOptions(false);
+    
+    // Focus input after state update
+    setTimeout(() => {
+      inputRef?.current?.focus();
+    }, 100);
+  }, [messages.length, t, setShowSellOptions]);
 
   const showWelcome = messages.length === 0 && !messagesLoading;
 
@@ -1487,10 +1501,7 @@ export function ChatInterface({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     data-testid="buy-suggestion"
-                    onClick={() => {
-                      setShowSellOptions(false);
-                      inputRef?.current?.focus?.();
-                    }}
+                    onClick={handleBuyStart}
                     className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                   >
                     <ShoppingBag className="h-6 w-6 text-primary" />
