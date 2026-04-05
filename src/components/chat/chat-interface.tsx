@@ -903,6 +903,7 @@ export function ChatInterface({
         const decoder = new TextDecoder();
         let buffer = "";
         let receivedAnalysis: Record<string, unknown> | null = null;
+        let assistantText = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -930,10 +931,11 @@ export function ChatInterface({
 
                 case "delta":
                   setStreamingStatus(null);
+                  assistantText += parsed.content;
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === aiMsgId
-                        ? { ...m, text: m.text + parsed.content }
+                        ? { ...m, text: assistantText }
                         : m
                     )
                   );
@@ -1971,16 +1973,5 @@ export function ChatInterface({
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-<Button asChild variant="outline" className="flex-1">
-  <Link href="/register" onClick={() => setShowLoginPrompt(false)}>
-    {locale === "ar" ? "إنشاء حساب" : "Sign Up"}
-  </Link>
-</Button>
-          </div >
-        </DialogContent >
-      </Dialog >
-    </div >
   );
 }
