@@ -1,5 +1,5 @@
 // i18n Translation System
-// Lightweight bilingual (Arabic/English) translation for Monetchat Kuwait
+// Lightweight bilingual (Arabic/English) translation for PickPic Kuwait
 
 export type Locale = "en" | "ar";
 
@@ -35,15 +35,16 @@ const translations = {
   // ========================
   // Chat Interface
   // ========================
-  "chat.welcome": { en: "Welcome to Monetchat!", ar: "!مرحباً بك في بيك بيك" },
+  "chat.welcome": { en: "Welcome to PickPic!", ar: "!مرحباً بك في بيك بيك" },
   "chat.subtitle": { en: "Tell me what you're looking for", ar: "أخبرني عما تبحث عنه" },
+  "chat.buyWelcome": { en: "How can I help you find things to buy in Kuwait?", ar: "كيف يمكنني مساعدتك في العثور على أشياء لشرائها في الكويت؟" },
   "chat.placeholder": { en: "Search for anything...", ar: "...ابحث عن أي شيء" },
   "chat.imageSearch": { en: "Image search", ar: "البحث بالصورة" },
   "chat.voiceSearch": { en: "Voice search", ar: "البحث الصوتي" },
   "chat.stopRecording": { en: "Stop recording", ar: "إيقاف التسجيل" },
   "chat.found": { en: "Here's what I found.", ar: ".إليك ما وجدته" },
   "chat.error": { en: "Sorry, something went wrong. Please try again.", ar: ".عذراً، حدث خطأ. يرجى المحاولة مرة أخرى" },
-  "chat.aiSearch": { en: "Monetchat AI Search", ar: "بحث بيك بيك الذكي" },
+  "chat.aiSearch": { en: "PickPic AI Search", ar: "بحث بيك بيك الذكي" },
 
   // Chat mode buttons (replace old suggestion chips)
   "chat.mode.buy": { en: "Buy", ar: "شراء" },
@@ -118,7 +119,7 @@ const translations = {
   "sell.startOver": { en: "Start Over with New Photo", ar: "البدء من جديد بصورة جديدة" },
   "sell.maxImages": { en: "Maximum 8 images", ar: "الحد الأقصى 8 صور" },
   "sell.published": { en: "Listing Published!", ar: "!تم نشر الإعلان" },
-  "sell.publishedDesc": { en: "Your item is now live on Monetchat.", ar: ".منتجك الآن متاح على بيك بيك" },
+  "sell.publishedDesc": { en: "Your item is now live on PickPic.", ar: ".منتجك الآن متاح على بيك بيك" },
   "sell.rejected": { en: "Content Rejected", ar: "تم رفض المحتوى" },
 
   // Listing Form
@@ -191,7 +192,7 @@ const translations = {
   "sell.aiAnalyzed": { en: "I analyzed your item! Edit the details below and publish when ready.", ar: "!لقد حللت منتجك! عدّل التفاصيل أدناه وانشر عندما تكون جاهزاً" },
   "sell.analysisFailed": { en: "Sorry, I had trouble analyzing your image. Please try again.", ar: ".عذراً، واجهت مشكلة في تحليل صورتك. يرجى المحاولة مرة أخرى" },
   "sell.loginRequired": { en: "You need to log in to publish a listing.", ar: ".يجب تسجيل الدخول لنشر إعلان" },
-  "sell.publishSuccess": { en: "Your listing is now live on Monetchat!", ar: "!إعلانك الآن متاح على بيك بيك" },
+  "sell.publishSuccess": { en: "Your listing is now live on PickPic!", ar: "!إعلانك الآن متاح على بيك بيك" },
   "sell.publishFailed": { en: "Failed to publish", ar: "فشل النشر" },
   "sell.uploadPrompt": { en: "To create a listing, please upload a photo of your item. I'll analyze it and help you set up the details!", ar: "!لإنشاء إعلان، يرجى تحميل صورة لمنتجك. سأحللها وأساعدك في إعداد التفاصيل" },
   "sell.inputPlaceholder": { en: "Describe your item or upload a photo...", ar: "...صف منتجك أو قم بتحميل صورة" },
