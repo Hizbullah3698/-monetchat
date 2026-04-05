@@ -707,7 +707,7 @@ export function ChatInterface({
   const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const [overlayProducts, setOverlayProducts] = useState<ChatProduct[] | null>(null);
   const [productContentLanguage, setProductContentLanguage] = useState<string | null>(null);
-  const [isSellMode, setIsSellMode] = useState(false);
+  const [showSellOptions, setShowSellOptions] = useState(false);
   const [showSellerProfileModal, setShowSellerProfileModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1426,45 +1426,7 @@ export function ChatInterface({
     sendMessage(text);
   };
 
-  const handleBuyStart = useCallback(() => {
-    if (messages.length > 0) return;
-    
-    // Send the initial "Buy" intent message from the user
-    // This will hide the welcome screen and trigger the AI search
-    sendMessage(t("chat.mode.buy"));
-    
-    // Focus input after state update
-    setTimeout(() => {
-      inputRef?.current?.focus();
-    }, 100);
-  }, [messages.length, t, sendMessage]);
-
   const showWelcome = messages.length === 0 && !messagesLoading;
-
-  if (isSellMode) {
-    return (
-      <div className={cn("flex flex-col relative h-full bg-white", className)}>
-        <SellForm 
-          onCancel={() => setIsSellMode(false)}
-          onSuccess={(product) => {
-            setIsSellMode(false);
-            setMessages(prev => [
-              ...prev,
-              {
-                id: Date.now().toString(),
-                role: "assistant",
-                text: "Your listing has been published successfully!",
-                published: { id: product.id, title: product.title }
-              }
-            ]);
-            if (appModeCtx) {
-              appModeCtx.updateChatTitle(product.title);
-            }
-          }}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className={cn("flex flex-col relative", className)}>
@@ -1526,7 +1488,10 @@ export function ChatInterface({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     data-testid="buy-suggestion"
-                    onClick={handleBuyStart}
+                    onClick={() => {
+                      setShowSellOptions(false);
+                      inputRef?.current?.focus?.();
+                    }}
                     className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                   >
                     <ShoppingBag className="h-6 w-6 text-primary" />
@@ -1534,13 +1499,45 @@ export function ChatInterface({
                   </button>
                   <button
                     data-testid="sell-suggestion"
-                    onClick={() => setIsSellMode(true)}
+                    onClick={() => setShowSellOptions((v) => !v)}
                     className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                   >
                     <Store className="h-6 w-6 text-primary" />
                     <span>{t("chat.mode.sell")}</span>
                   </button>
                 </div>
+
+                {/* Sell sub-options */}
+                <AnimatePresence>
+                  {showSellOptions && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="grid grid-cols-2 gap-2 overflow-hidden"
+                    >
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                      >
+                        <ImageIcon className="h-4 w-4 shrink-0" />
+                        <span>{t("chat.mode.uploadPhoto")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInputValue(t("chat.sellDescribePrompt"));
+                          setShowSellOptions(false);
+                          inputRef?.current?.focus?.();
+                        }}
+                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4 shrink-0" />
+                        <span>{t("chat.mode.describeItem")}</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           )}
