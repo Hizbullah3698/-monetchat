@@ -1530,10 +1530,11 @@ export function ChatInterface({
                   </button>
                 </div>
 
-                {/* Buy sub-options */}
-                <AnimatePresence>
+                {/* Sub-options for Buy / Sell */}
+                <AnimatePresence mode="wait">
                   {showBuyOptions && (
                     <motion.div
+                      key="buy-options"
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
@@ -1563,12 +1564,10 @@ export function ChatInterface({
                       </button>
                     </motion.div>
                   )}
-                </AnimatePresence>
 
-                {/* Sell sub-options */}
-                <AnimatePresence>
                   {showSellOptions && (
                     <motion.div
+                      key="sell-options"
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
@@ -1576,7 +1575,10 @@ export function ChatInterface({
                       className="grid grid-cols-2 gap-2 overflow-hidden"
                     >
                       <button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => {
+                          setShowSellOptions(false);
+                          fileInputRef.current?.click();
+                        }}
                         className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
                       >
                         <ImageIcon className="h-4 w-4 shrink-0" />
