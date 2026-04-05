@@ -1530,74 +1530,68 @@ export function ChatInterface({
                   </button>
                 </div>
 
-                {/* Sub-options for Buy / Sell */}
-                <AnimatePresence mode="wait">
+                {/* Sub-options for Buy / Sell — CSS max-height transition (reliable across all browsers) */}
+                <div
+                  className="overflow-hidden transition-all duration-200 ease-in-out"
+                  style={{
+                    maxHeight: showBuyOptions || showSellOptions ? "200px" : "0px",
+                    opacity: showBuyOptions || showSellOptions ? 1 : 0,
+                  }}
+                >
+                  {/* Buy sub-options */}
                   {showBuyOptions && (
-                    <motion.div
-                      key="buy-options"
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-2 gap-2 overflow-hidden"
-                    >
+                    <div className="grid grid-cols-2 gap-2 pt-1">
                       <button
                         onClick={() => {
                           setShowBuyOptions(false);
-                          fileInputRef.current?.click();
+                          handleImageButtonClick(fileInputRef);
                         }}
-                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                        className="flex items-center gap-2 rounded-lg border bg-card px-3 py-3 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                       >
-                        <ImageIcon className="h-4 w-4 shrink-0" />
+                        <ImageIcon className="h-4 w-4 shrink-0 text-primary" />
                         <span>{t("chat.mode.uploadPhoto")}</span>
                       </button>
                       <button
                         onClick={() => {
-                          setInputValue(t("chat.buySearchPrompt"));
+                          setInputValue("I'm looking for ");
                           setShowBuyOptions(false);
-                          inputRef?.current?.focus?.();
+                          setTimeout(() => inputRef?.current?.focus(), 50);
                         }}
-                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                        className="flex items-center gap-2 rounded-lg border bg-card px-3 py-3 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                       >
-                        <Send className="h-4 w-4 shrink-0" />
+                        <Send className="h-4 w-4 shrink-0 text-primary" />
                         <span>{t("chat.mode.searchChat")}</span>
                       </button>
-                    </motion.div>
+                    </div>
                   )}
 
+                  {/* Sell sub-options */}
                   {showSellOptions && (
-                    <motion.div
-                      key="sell-options"
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-2 gap-2 overflow-hidden"
-                    >
+                    <div className="grid grid-cols-2 gap-2 pt-1">
                       <button
                         onClick={() => {
                           setShowSellOptions(false);
-                          fileInputRef.current?.click();
+                          handleImageButtonClick(fileInputRef);
                         }}
-                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                        className="flex items-center gap-2 rounded-lg border bg-card px-3 py-3 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                       >
-                        <ImageIcon className="h-4 w-4 shrink-0" />
+                        <ImageIcon className="h-4 w-4 shrink-0 text-primary" />
                         <span>{t("chat.mode.uploadPhoto")}</span>
                       </button>
                       <button
                         onClick={() => {
                           setInputValue(t("chat.sellDescribePrompt"));
                           setShowSellOptions(false);
-                          inputRef?.current?.focus?.();
+                          setTimeout(() => inputRef?.current?.focus(), 50);
                         }}
-                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                        className="flex items-center gap-2 rounded-lg border bg-card px-3 py-3 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
                       >
-                        <Pencil className="h-4 w-4 shrink-0" />
+                        <Pencil className="h-4 w-4 shrink-0 text-primary" />
                         <span>{t("chat.mode.describeItem")}</span>
                       </button>
-                    </motion.div>
+                    </div>
                   )}
-                </AnimatePresence>
+                </div>
               </div>
             </div>
           )}

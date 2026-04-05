@@ -53,7 +53,7 @@ const translations = {
   "chat.mode.searchChat": { en: "Search by Chat", ar: "البحث عن طريق الدردشة" },
   "chat.mode.describeItem": { en: "Describe your item", ar: "صف منتجك" },
   "chat.sellDescribePrompt": { en: "I want to sell: ", ar: "أريد بيع: " },
-  "chat.buySearchPrompt": { en: "Pickpic: Visual AI Marketplace in a Single Chat", ar: "بيك بيك: سوق الذكاء الاصطناعي البصري في دردشة واحدة" },
+  "chat.buySearchPrompt": { en: "I'm looking for ", ar: "أبحث عن " },
 
   // Seller profile required modal
   "seller.profileRequired": { en: "Complete your seller profile", ar: "أكمل ملف البائع الخاص بك" },
