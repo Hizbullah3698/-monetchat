@@ -35,6 +35,7 @@ const translations = {
   // ========================
   // Chat Interface
   // ========================
+  "chat.welcome": { en: "Welcome to PickPic!", ar: "مرحباً بكم في بيك بيك!" },
   "chat.subtitle": { en: "Tell me what you're looking for", ar: "أخبرني عما تبحث عنه" },
   "chat.buyWelcome": { en: "How can I help you find things to buy in Kuwait?", ar: "كيف يمكنني مساعدتك في العثور على أشياء لشرائها في الكويت؟" },
   "chat.placeholder": { en: "Search for anything...", ar: "...ابحث عن أي شيء" },
@@ -49,8 +50,10 @@ const translations = {
   "chat.mode.buy": { en: "Buy", ar: "شراء" },
   "chat.mode.sell": { en: "Sell", ar: "بيع" },
   "chat.mode.uploadPhoto": { en: "Upload a photo", ar: "تحميل صورة" },
+  "chat.mode.searchChat": { en: "Search by Chat", ar: "البحث عن طريق الدردشة" },
   "chat.mode.describeItem": { en: "Describe your item", ar: "صف منتجك" },
   "chat.sellDescribePrompt": { en: "I want to sell: ", ar: "أريد بيع: " },
+  "chat.buySearchPrompt": { en: "Pickpic: Visual AI Marketplace in a Single Chat", ar: "بيك بيك: سوق الذكاء الاصطناعي البصري في دردشة واحدة" },
 
   // Seller profile required modal
   "seller.profileRequired": { en: "Complete your seller profile", ar: "أكمل ملف البائع الخاص بك" },

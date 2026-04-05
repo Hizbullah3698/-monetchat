@@ -707,6 +707,7 @@ export function ChatInterface({
   const [overlayProducts, setOverlayProducts] = useState<ChatProduct[] | null>(null);
   const [productContentLanguage, setProductContentLanguage] = useState<string | null>(null);
   const [showSellOptions, setShowSellOptions] = useState(false);
+  const [showBuyOptions, setShowBuyOptions] = useState(false);
   const [showSellerProfileModal, setShowSellerProfileModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1501,21 +1502,68 @@ export function ChatInterface({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     data-testid="buy-suggestion"
-                    onClick={handleBuyStart}
-                    className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
+                    onClick={() => {
+                      setShowBuyOptions((v) => !v);
+                      setShowSellOptions(false);
+                    }}
+                    className={cn(
+                      "flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium transition-colors",
+                      showBuyOptions ? "bg-primary/10 border-primary" : "hover:bg-primary/5 hover:border-primary/40"
+                    )}
                   >
                     <ShoppingBag className="h-6 w-6 text-primary" />
                     <span>{t("chat.mode.buy")}</span>
                   </button>
                   <button
                     data-testid="sell-suggestion"
-                    onClick={() => setShowSellOptions((v) => !v)}
-                    className="flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium hover:bg-primary/5 hover:border-primary/40 transition-colors"
+                    onClick={() => {
+                      setShowSellOptions((v) => !v);
+                      setShowBuyOptions(false);
+                    }}
+                    className={cn(
+                      "flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-medium transition-colors",
+                      showSellOptions ? "bg-primary/10 border-primary" : "hover:bg-primary/5 hover:border-primary/40"
+                    )}
                   >
                     <Store className="h-6 w-6 text-primary" />
                     <span>{t("chat.mode.sell")}</span>
                   </button>
                 </div>
+
+                {/* Buy sub-options */}
+                <AnimatePresence>
+                  {showBuyOptions && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="grid grid-cols-2 gap-2 overflow-hidden"
+                    >
+                      <button
+                        onClick={() => {
+                          setShowBuyOptions(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                      >
+                        <ImageIcon className="h-4 w-4 shrink-0" />
+                        <span>{t("chat.mode.uploadPhoto")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInputValue(t("chat.buySearchPrompt"));
+                          setShowBuyOptions(false);
+                          inputRef?.current?.focus?.();
+                        }}
+                        className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+                      >
+                        <Send className="h-4 w-4 shrink-0" />
+                        <span>{t("chat.mode.searchChat")}</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* Sell sub-options */}
                 <AnimatePresence>
